@@ -1,0 +1,14 @@
+#+PROPERTY: tangle sequent1.scm
+#+title: sequent1
+
+* todo
+
+  - ><
+
+* note
+
+  - ><
+
+* ><
+
+  

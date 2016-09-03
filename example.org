@@ -1,0 +1,439 @@
+#+PROPERTY: tangle example.scm
+#+title: example code of sequent0
+
+* natural
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (:m :n succ -> :m :n add succ))
+
+   (~ mul (natural natural -> natural)
+      (:m zero -> zero)
+      (:m :n succ -> :m :n mul :m add))
+
+   (~ factorial (natural -> natural)
+      (zero -> zero succ)
+      (:n succ -> :n factorial :n succ mul))
+
+   (app (->
+         zero succ
+         zero succ succ
+         add))
+
+   (app (->
+         zero succ succ
+         zero succ succ
+         mul))
+
+   (app (->
+         zero succ succ succ
+         factorial)))
+  #+end_src
+
+* add/commute by richly-defined add
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (zero :m -> :m)
+      (:m succ :n succ -> :m :n add succ succ))
+
+   (+ eq ({:t : type} :t :t -> type)
+      refl ({:t : type} {:d : :t} -> :d :d eq))
+
+   (~ eq/test
+      (-> zero zero add zero zero add eq)
+      (-> refl))
+
+   (~ add/commute ((:m :n : natural) -> :m :n add :n :m add eq)
+      (:m zero -> refl)
+      (:m :n succ -> refl)))
+  #+end_src
+
+* stack processing
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ drop (:t ->)
+      (:d ->))
+
+   (~ dup (:t -> :t :t)
+      (:d -> :d :d))
+
+   (~ over (:t1 :t2 -> :t1 :t2 :t1)
+      (:d1 :d2 -> :d1 :d2 :d1))
+
+   (~ tuck (:t1 :t2 -> :t2 :t1 :t2)
+      (:d1 :d2 -> :d2 :d1 :d2))
+
+   (~ swap (:t1 :t2 -> :t2 :t1)
+      (:d1 :d2 -> :d2 :d1))
+
+   (app (-> zero
+            zero succ
+            swap
+            drop
+            dup)))
+  #+end_src
+
+* list
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (:m :n succ -> :m :n add succ))
+
+   (~ mul (natural natural -> natural)
+      (:m zero -> zero)
+      (:m :n succ -> :m :n mul :m add))
+
+   (+ list (type -> type)
+      null (-> :t list)
+      cons (:t list :t -> :t list))
+
+   (~ append (:t list :t list -> :t list)
+      (:l null -> :l)
+      (:l :r :e cons -> :l :r append :e cons))
+
+   (~ length (:t list -> natural)
+      (null -> zero)
+      (:l :e cons -> :l length succ))
+
+   (app (->
+         null
+         zero cons
+         null
+         zero cons
+         append))
+
+   (app (->
+         null
+         zero cons
+         zero cons
+         null
+         zero cons
+         zero cons
+         append
+         length)))
+  #+end_src
+
+* list map
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (:m :n succ -> :m :n add succ))
+
+   (~ mul (natural natural -> natural)
+      (:m zero -> zero)
+      (:m :n succ -> :m :n mul :m add))
+
+   (+ list (type -> type)
+      null (-> :t list)
+      cons (:t list :t -> :t list))
+
+   (~ append (:t list :t list -> :t list)
+      (:l null -> :l)
+      (:l :r :e cons -> :l :r append :e cons))
+
+   (~ map (:t1 list (:t1 -> :t2) -> :t2 list)
+      (null :f -> null)
+      (:l :e cons :f -> :l :f map :e :f apply cons))
+
+   (app (->
+         null
+         zero cons
+         zero cons
+         zero cons
+         null
+         zero cons
+         zero cons
+         zero cons
+         append
+         (zero -> zero succ)
+         map))
+
+   (app (->
+         null
+         zero cons
+         zero cons
+         (lambda (natural -> natural)
+           (zero -> zero succ))
+         map))
+
+   (+ has-length (:t list natural -> type)
+      null/has-length (-> null zero has-length)
+      cons/has-length (:l :n has-length -> :l :a cons :n succ has-length))
+
+   (~ map/has-length (:l :n has-length -> :l :f map :n has-length)
+      (null/has-length -> null/has-length)
+      (:h cons/has-length -> :h map/has-length cons/has-length)))
+  #+end_src
+
+* vector
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (:m :n succ -> :m :n add succ))
+
+   ;; ;; this can not be used to prove append
+   ;; (~ add (natural natural -> natural)
+   ;;    (:m zero -> :m)
+   ;;    (zero :m -> :m)
+   ;;    (:m succ :n succ -> :m :n add succ succ))
+
+   ;; ;; this can be used to prove append
+   ;; (~ add (natural natural -> natural)
+   ;;    (:m zero -> :m)
+   ;;    (zero :m -> :m)
+   ;;    (:m succ :n succ -> :m :n add succ succ)
+   ;;    (:m :n succ -> :m :n add succ)
+   ;;    (:m succ :n -> :m :n add succ))
+
+   (~ mul (natural natural -> natural)
+      (:m zero -> zero)
+      (:m :n succ -> :m :n mul :m add))
+
+   (+ vector (natural type -> type)
+      null (-> zero :t vector)
+      cons (:n :t vector :t -> :n succ :t vector))
+
+   (~ append (:m :t vector :n :t vector -> :m :n add :t vector)
+      (:l null -> :l)
+      (:l :r :e cons -> :l :r append :e cons))
+
+   (app (->
+         null
+         zero cons
+         zero cons
+         zero cons
+         null
+         zero cons
+         zero cons
+         zero cons
+         append)))
+  #+end_src
+
+* vector map
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (:m :n succ -> :m :n add succ))
+
+   (~ mul (natural natural -> natural)
+      (:m zero -> zero)
+      (:m :n succ -> :m :n mul :m add))
+
+   (+ vector (natural type -> type)
+      null (-> zero :t vector)
+      cons (:n :t vector :t -> :n succ :t vector))
+
+   (~ append (:m :t vector :n :t vector -> :m :n add :t vector)
+      (:l null -> :l)
+      (:l :r :e cons -> :l :r append :e cons))
+
+   ;; (~ map (:n :t1 vector (:t1 -> :t2) -> :n :t2 vector)
+   ;;    (null :f -> null)
+   ;;    (:l :e cons :f -> :l :f map :e :f apply cons))
+
+   (~ map (:n :t1 vector (:t1 -> :t2) -> :n :t2 vector)
+      (null (:f) -> null)
+      (:l :e cons (:f) -> :l (:f) map :e :f cons))
+
+   (app (->
+         null
+         zero cons
+         zero cons
+         zero cons
+         null
+         zero cons
+         zero cons
+         zero cons
+         append
+         (zero -> zero succ)
+         map)))
+  #+end_src
+
+* >< equality
+
+  - I do not know how to handle equality
+
+  #+begin_src scheme :tangle no
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (+ eq ({:t : type} :t :t -> type)
+      refl ({:t : type} {:d : :t} -> :d :d eq))
+
+   ;; success
+   (~ eq/test0 (-> zero succ succ :z eq)
+      (-> refl))
+
+   ;; fail
+   (~ eq/test1 (-> :z zero succ succ eq)
+      (-> refl)))
+
+  fail to cover/data-list:
+  dl-tsc :
+  ((cons (eq ((cons (succ ((cons (succ ((cons (zero ()))))))))
+              (var (#((:z . 3852) ((1 cons (natural ())))) 0))))))
+
+  type-dl-sc :
+  ((cons (eq ((var (#((:d . 3856) ((1 var (#((:t . 3857) ((0 var (#((:t . 3858) ((1 cons (type ())))) 0)) (1 cons (type ())))) 0)))) 0))
+              (var (#((:d . 3856) ((1 var (#((:t . 3857) ((0 var (#((:t . 3858) ((1 cons (type ())))) 0)) (1 cons (type ())))) 0)))) 0))))))
+
+  info-list :
+  (cover/data
+   fail because non-var can never cover var
+   (pattern:
+     (cons (succ ((cons (succ ((cons (zero ())))))))))
+   (data:
+     (var (#((:z . 3852) ((1 cons (natural ())))) 0))))
+  #+end_src
+
+* >< associative of add
+
+  #+begin_src scheme :tangle no
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (:m :n succ -> :m :n add succ))
+
+   (~ mul (natural natural -> natural)
+      (:m zero -> zero)
+      (:m :n succ -> :m :n mul :m add))
+
+   (+ eq ({:t : type} :t :t -> type)
+      refl ({:t : type} {:d : :t} -> :d :d eq))
+
+   (~ cong
+      ({:t1 :t2 : type} {:x :y : :t1}
+       :x :y eq (:f : (:t1 -> :t2)) ->
+       :x :f apply :y :f apply eq)
+      (refl :f -> refl))
+
+   ;; (~ associative
+   ;;    ((:x :y :z : natural) ->
+   ;;     :x :y add :z add
+   ;;     :x :y :z add add eq)
+   ;;    (:x :y zero -> refl)
+   ;;    (:x :y :z succ ->
+   ;;     :x :y :z associative (lambda (natural -> natural) (:n -> :n succ)) cong))
+
+   ;;     (a + b) + S(c)
+   ;; =   S((a + b) + c)  [by A2]
+   ;; =   S(a + (b + c))  [by the induction hypothesis]
+   ;; =   a + S(b + c)    [by A2]
+   ;; =   a + (b + S(c))  [by A2]
+
+   ;; :x :y add :z succ add
+   ;; :x :y add :z add succ
+   ;; :x :y :z add add succ
+   ;; :x :y :z add succ add
+   ;; :x :y :z succ add add
+
+   (~ t1 ((:x :y :z : natural) ->
+          :x :y :z add add succ
+          :x :y :z succ add add eq)
+      (:x0 :y0 :z0 -> refl))
+
+   (~ t2 (->
+          zero succ
+          zero succ eq)
+      (-> refl (lambda (natural -> natural) (:n -> :n succ)) cong)))
+  #+end_src
+
+* natural-induction
+
+  #+begin_src scheme
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ natural-induction ((:p : (natural -> type))
+                         zero :p
+                         ((:k : natural) :k :p -> :k succ :p)
+                         (:x : natural) -> :x :p)
+      (:q :q/z :q/s zero -> :q/z)
+      (:q :q/z :q/s :n succ ->
+          :n
+          :q :q/z :q/s :n natural-induction
+          :q/s)))
+  #+end_src
+
+* test recur-check
+
+  #+begin_src scheme :tangle no
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m zero -> :m)
+      (:m :n succ -> :m :n succ add succ)))
+
+  (eva
+
+   (+ natural (-> type)
+      zero (-> natural)
+      succ (natural -> natural))
+
+   (~ add (natural natural -> natural)
+      (:m :n -> :m :n add succ)))
+  #+end_src

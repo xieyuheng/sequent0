@@ -46,10 +46,14 @@
       zero (-> natural)
       succ (natural -> natural))
 
+   ;; (~ add (natural natural -> natural)
+   ;;    (:m zero -> :m)
+   ;;    (zero :m -> :m)
+   ;;    (:m succ :n succ -> :m :n add succ succ))
+
    (~ add (natural natural -> natural)
       (:m zero -> :m)
-      (zero :m -> :m)
-      (:m succ :n succ -> :m :n add succ succ))
+      (:m :n succ -> :m :n add succ))
 
    (+ eq ({:t : type} :t :t -> type)
       refl ({:t : type} {:d : :t} -> :d :d eq))
@@ -58,9 +62,45 @@
       (-> zero zero add zero zero add eq)
       (-> refl))
 
+   (~ cong
+      ({:t1 :t2 : type}
+       {:x :y : :t1}
+       :x :y eq
+       (:f : (:t1 -> :t2)) ->
+       :x :f :y :f eq)
+      (refl (:f) -> refl))
+
+   (~ add/zero-commute ((:m : natural) -> :m zero add zero :m add eq)
+      (zero -> refl)
+      (:m succ -> :m add/zero-commute (succ) cong))
+
+   ;; :m zero add
+   ;; zero :m add eq
+
+   ;; :m succ zero add
+   ;; zero :m succ add eq
+
+   ;; :m zero add succ
+   ;; zero :m add succ eq
+
    (~ add/commute ((:m :n : natural) -> :m :n add :n :m add eq)
-      (:m zero -> refl)
-      (:m :n succ -> refl)))
+      (:m zero -> :m add/zero-commute)
+      (:m :n succ -> :m :n add/commute (succ) cong ><><><)))
+
+  :m :n add/commute
+  ;; :m :n add
+  ;; :n :m add eq
+  (succ) cong
+  ;; :m :n add succ
+  ;; :n :m add succ eq
+
+  这里需要等式的相乘
+  ;; :n succ :m add
+  ;; :n :m succ add eq
+
+  ><><><
+  ;; :m :n succ add
+  ;; :n succ :m add eq
   #+end_src
 
 * stack processing
@@ -105,7 +145,7 @@
 
    (~ add (natural natural -> natural)
       (:m zero -> :m)
-      (:m :n succ -> :m :n add succ))
+       (:m :n succ -> :m :n add succ))
 
    (~ mul (natural natural -> natural)
       (:m zero -> zero)
@@ -309,8 +349,11 @@
       zero (-> natural)
       succ (natural -> natural))
 
-   (+ eq ({:t : type} :t :t -> type)
+   (+ eq ({:t : type} (:d : :t) (:d : :t) -> type)
       refl ({:t : type} {:d : :t} -> :d :d eq))
+
+   ;; (+ eq ({:t : type} :t :t -> type)
+   ;;    refl ({:t : type} {:d : :t} -> :d :d eq))
 
    ;; success
    (~ eq/test0 (-> zero succ succ :z eq)
@@ -319,6 +362,15 @@
    ;; fail
    (~ eq/test1 (-> :z zero succ succ eq)
       (-> refl)))
+
+   ;; success
+   (~ eq/test0 (-> zero :z eq)
+      (-> refl))
+
+   ;; fail
+   (~ eq/test1 (-> :z zero eq)
+      (-> refl)))
+
 
   fail to cover/data-list:
   dl-tsc :
@@ -361,16 +413,14 @@
    (~ cong
       ({:t1 :t2 : type} {:x :y : :t1}
        :x :y eq (:f : (:t1 -> :t2)) ->
-       :x :f apply :y :f apply eq)
+       :x :f :y :f eq)
       (refl :f -> refl))
 
-   ;; (~ associative
-   ;;    ((:x :y :z : natural) ->
-   ;;     :x :y add :z add
-   ;;     :x :y :z add add eq)
-   ;;    (:x :y zero -> refl)
-   ;;    (:x :y :z succ ->
-   ;;     :x :y :z associative (lambda (natural -> natural) (:n -> :n succ)) cong))
+   (~ associative ((:x :y :z : natural) ->
+                   :x :y add :z add
+                   :x :y :z add add eq)
+      (:x :y zero -> refl)
+      (:x :y :z succ -> :x :y :z associative (:n -> :n succ) cong))
 
    ;;     (a + b) + S(c)
    ;; =   S((a + b) + c)  [by A2]

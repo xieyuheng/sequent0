@@ -1,14 +1,167 @@
-#+PROPERTY: tangle sequent1.scm
-#+title: sequent1
+#+PROPERTY: tangle sequent0.scm
+#+title: sequent0
 
 * todo
 
   - ><
 
+* 記
+
+  - 回到 stack-based 的實現方式
+    以明確 cut 在實現中的出現
+    要知道
+    形成 trunk 是因爲 branch
+    而 cut 中不會出現 branch
+
+  - 使用完全的 threaded-code-interpreter
+    包括 return-stack
+    不同的 context 就是不同的 return-stack 處理函數
+
+  - 用完全不同的方式來處理 eq 而不計較理論特性
+    cut 中 data uni (uni at level-0) 而 type cover
+    可以解決 eq 的對稱性問題
+    也能解決 (-> (:d : A) :d P) 的問題
+    這樣出現 uni 的地方就有兩處
+    一爲如上
+    另一爲 branch 的 antecedent 對 type 的 antecedent 的特化
+
+  - 可以用遞歸函數來證明 trunk 之間的 eq
+    因此 eq 可以用來 rewrite trunk
+    因此 eq 也可以用來 rewrite data
+
+  - trunk 可以在 compute 中出現
+    需要在 stack 中加入 interface 處理 trunk
+    每次遇到 trunk 都嘗試 rewrite
+
+  - 分離處理如下四種情況
+    |      | type-check | compute |
+    |------+------------+---------|
+    | jo   |            |         |
+    | data |            |         |
+    jo 不爲 call 優化而直接用 (<tag> ~)
+
 * note
 
-  - ><
+*** var & jojo & arrow & body & type
+
+    #+begin_src scheme :tangle no
+    (type var     id level)
+    (type jojo    {jo ...})
+    (type arrow   jojo jojo)
+    (type body    {arrow ...})
+    (type type
+      arrow
+      jojo)
+    (type lambda  type body)
+    #+end_src
+
+*** data
+
+    #+begin_src scheme :tangle no
+    (type data
+      var
+      cons
+      arrow
+      lambda
+      bind
+      trunk)
+
+    (type cons    name {data ...})
+    (type bind    data var)
+    (type trunk   type trunk-body {data ...} index)
+
+    (type trunk-body
+      trunk-name
+      trunk-var
+      trunk-arrow-list)
+
+    (type trunk-name       name)
+    (type trunk-var        var)
+    (type trunk-arrow-list {arrow ...})
+    #+end_src
+
+*** jo
+
+    #+begin_src scheme :tangle no
+    (type jo
+      var
+      arrow
+      call
+      limited-call
+      limited-apply
+      lambda
+      ex-bind
+      im-bind)
+
+    (type call name)
+    (type limited-call  name number)
+    (type limited-apply number)
+
+    (type ex-bind var)
+    (type im-bind var)
+    #+end_src
+
+*** (pre) var & jojo & arrow & body & type
+
+    #+begin_src scheme :tangle no
+    (type pre-var     name level)
+    (type pre-jojo    {pre-jo ...})
+    (type pre-arrow   pre-jojo pre-jojo)
+    (type pre-body    {pre-arrow ...})
+    (type pre-type
+      pre-arrow
+      pre-jojo)
+    (type pre-lambda  pre-type pre-body)
+    #+end_src
+
+*** pre-jo
+
+    #+begin_src scheme :tangle no
+    (type pre-jo
+      pre-var
+      call
+      limited-call
+      limited-apply
+      pre-lambda
+      pre-arrow
+      pre-ex-bind
+      pre-im-bind)
+
+    (type pre-ex-bind pre-var)
+    (type pre-im-bind pre-var)
+    #+end_src
+
+*** meaning
+
+    #+begin_src scheme :tangle no
+    (type meaning
+      meaning-type-cons
+      meaning-data-cons
+      meaning-function)
+
+    (type meaning-type-cons pre-type name {name ...})
+    (type meaning-data-cons pre-type name name)
+    (type meaning-function  pre-type pre-body)
+    #+end_src
+
+*** >< env
+
+    #+begin_src scheme :tangle no
+    (type bs {(id . ls) ...})
+    (type ns {(name . def) ...})
+    (type ls {(level . data) ...})
+    (type def
+      {'def/type ty name {name ...}}
+      {'def/data ty name name}
+      {'def/jojo ty {jo ...} var-order}
+      {'def/arar ty {ar ...} var-order})
+    #+end_src
 
 * ><
 
-  
+  #+begin_src scheme
+  (define data-stack '())
+  (define return-stack '())
+  (define binding-stack '())
+  (define name-stack '())
+  #+end_src

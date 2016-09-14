@@ -47,22 +47,14 @@
     (and (list? v) (pair? v)
          (equal? (car v) (vector 'flower-barcket/as-im-bind))
          (member ': v)))
-  (cond [(var? jo)
-         (list 'pre-var jo)]
-        [(call? jo)
-         (list 'call jo)]
-        [(limited-call? jo)
-         (compile-limited-call jo)]
-        [(limited-apply? jo)
-         (compile-limited-apply jo)]
-        [(arrow? jo)
-         (compile-arrow jo)]
-        [(lambda? jo)
-         (compile-lambda jo)]
-        [(ex-bind? jo)
-         (compile-ex-bind jo)]
-        [(im-bind? jo)
-         (compile-im-bind (cdr jo))]))
+  (cond [(var? jo)                (list 'pre-var jo)]
+        [(call? jo)               (list 'pre-call jo)]
+        [(limited-call? jo)       (compile-limited-call jo)]
+        [(limited-apply? jo)      (compile-limited-apply jo)]
+        [(arrow? jo)              (compile-arrow jo)]
+        [(lambda? jo)             (compile-lambda jo)]
+        [(ex-bind? jo)            (compile-ex-bind jo)]
+        [(im-bind? jo)            (compile-im-bind (cdr jo))]))
 
 (define (compile-ex-bind jo)
   (list 'pre-ex-bind
@@ -101,7 +93,7 @@
         (compile-body (cdr (cdr lambda)))))
 
 (define (compile-limited-call l)
-  (list 'limited-call
+  (list 'pre-limited-call
         (last l)
         (compile-jojo (drop-last l))))
 
@@ -123,7 +115,7 @@
            (list (compile-jo last-jo))]
           [else
            (compile-jojo last-jo)]))
-  (list 'limited-apply
+  (list 'pre-limited-apply
         function-jojo
         (compile-jojo (drop-last l))))
 
@@ -234,3 +226,115 @@
       (display meaning) (display "\n")
       (display "</define-data>\n")
       (display "\n"))))
+
+(define id/counter 0)
+
+(define (id/new n ls)
+  (set! id/counter (+ 1 id/counter))
+  (vector (cons n id/counter) ls))
+
+(define (unique-copy/pre-jojo pjj s)
+  (: pre-jojo scope -> {jojo scope})
+  (match pjj
+    [{} {{} s}]
+    [(pj . r)
+     (match (unique-copy/pre-jo pj s)
+       [{j s1}
+        (match (unique-copy/pre-jojo r s1)
+          [{jj s2}
+           {(cons j jj) s2}])])]))
+
+(define (unique-copy/pre-type pt s)
+  (case (car pt)
+    ['pre-arrow (unique-copy/pre-arrow pt s)]
+    [else (unique-copy/pre-jojo pt s)]))
+
+(define (unique-copy/pre-body pb s)
+  (match pb
+    [{} {{} s}]
+    [(pa . r)
+     (match (unique-copy/pre-arrow pa s)
+       [{a s1}
+        (match (unique-copy/pre-body r s1)
+          [{b s2}
+           {(cons a b) s2}])])]))
+
+(define (unique-copy/pre-jo pj s)
+  (: pre-jo scope -> {jo scope})
+  (case (car pjj)
+    ['pre-var           (unique-copy/pre-var pj s)]
+    ['pre-call          (unique-copy/pre-call pj s)]
+    ['pre-limited-call  (unique-copy/pre-limited-call pj s)]
+    ['pre-limited-apply (unique-copy/pre-limited-apply pj s)]
+    ['pre-arrow         (unique-copy/pre-arrow pj s)]
+    ['pre-lambda        (unique-copy/pre-lambda pj s)]
+    ['pre-ex-bind       (unique-copy/pre-ex-bind pj s)]
+    ['pre-im-bind       (unique-copy/pre-im-bind pj s)]))
+
+(define (unique-copy/pre-var pv s)
+  (match pv
+    [{'pre-var n}
+     (let ([found (assq n s)])
+       (if found
+         (let ([old-id (cdr found)])
+           {{'var old-id} s})
+         (let ([new-id (id/new n '())])
+           {{'var new-id}
+            (cons (cons n new-id) s)})))]))
+
+(define (unique-copy/pre-call pc s)
+  (match pc
+    [{'pre-call n}
+     {{'call n} s}]))
+
+(define (unique-copy/pre-limited-call pc s)
+  (match pc
+    [{'pre-limited-call n pjj}
+     (match (unique-copy/pre-jojo pjj s)
+       [{jj s1}
+        {{'limited-call n jj} s1}])]))
+
+(define (unique-copy/pre-limited-apply pa s)
+  (match pa
+    [{'pre-limited-apply pj pjj}
+     (match (unique-copy/pre-jo pj s)
+       [[{j s1}]
+        (match (unique-copy/pre-jojo pjj s1)
+          [{jj s2}
+           {{'limited-apply j jj} s2}])])]))
+
+(define (unique-copy/pre-arrow pa s)
+  (match pa
+    [{'pre-arrow pjj1 pjj2}
+     (match (unique-copy/pre-jojo pjj1 s)
+       [[{jj1 s1}]
+        (match (unique-copy/pre-jojo pjj2 s1)
+          [{jj2 s2}
+           {{'array jj1 jj2} s2}])])]))
+
+(define (unique-copy/pre-lambda pl s)
+  (match pl
+    [{'pre-lambda pt pb}
+     (match (unique-copy/pre-type pt s)
+       [[{t s1}]
+        (match (unique-copy/pre-body pb s1)
+          [{b s2}
+           {{'lambda t b} s2}])])]))
+
+(define (unique-copy/pre-ex-bind pe s)
+  (match pe
+    [{'pre-ex-bind pj pvl}
+     (match (unique-copy/pre-jo pj s)
+       [[{j s1}]
+        (match (unique-copy/pre-jojo pvl s1)
+          [{vl s2}
+           {{'ex-bind j vl} s2}])])]))
+
+(define (unique-copy/pre-im-bind pi s)
+  (match pi
+    [{'pre-im-bind pj pvl}
+     (match (unique-copy/pre-jo pj s)
+       [[{j s1}]
+        (match (unique-copy/pre-jojo pvl s1)
+          [{vl s2}
+           {{'im-bind j vl} s2}])])]))

@@ -3,7 +3,6 @@
 
 * todo
 
-  - unique-id
   - binding-stack
     unify
     cover
@@ -54,121 +53,90 @@
 
 * note
 
-*** var & jojo & arrow & body & type
-
-    #+begin_src scheme :tangle no
-    (type var     id)
-    (type jojo    {jo ...})
-    (type arrow   jojo jojo)
-    (type body    {arrow ...})
-    (type type
-      arrow
-      jojo)
-    (type lambda  type body)
-    #+end_src
-
 *** data
 
     #+begin_src scheme :tangle no
     (type data
-      var
-      cons
-      arrow
-      lambda
-      bind
-      trunk)
+      var                id
+      cons               name {data ...}
+      arrow              jojo jojo
+      lambda             type body
+      bind               data var
+      trunk              type trunk-body {data ...} index)
 
-    (type cons    name {data ...})
-    (type bind    data var)
-    (type trunk   type trunk-body {data ...} index)
+    (type type
+      arrow              ~
+      jojo               ~)
+
+    (type jojo           {jo ...})
+    (type body           {arrow ...})
 
     (type trunk-body
-      trunk-name
-      trunk-var
-      trunk-arrow-list)
+      trunk-name         name
+      trunk-var          var
+      trunk-arrow-list   {arrow ...})
 
-    (type trunk-name       name)
-    (type trunk-var        var)
-    (type trunk-arrow-list {arrow ...})
+    (type id             (vector (name . counter) ls))
+    ;; vector thus unique
+    ;; ls (level binding-list) for commit
     #+end_src
 
 *** jo
 
     #+begin_src scheme :tangle no
     (type jo
-      var
-      call
-      limited-call
-      limited-apply
-      arrow
-      lambda
-      ex-bind
-      im-bind)
-
-    (type call name)
-    (type limited-call  name jojo)
-    (type limited-apply jo jojo)
-
-    (type ex-bind jo {var ...})
-    (type im-bind jo {var ...})
-    #+end_src
-
-*** (pre) var & jojo & arrow & body & type
-
-    #+begin_src scheme :tangle no
-    (type pre-var     name)
-    (type pre-jojo    {pre-jo ...})
-    (type pre-arrow   pre-jojo pre-jojo)
-    (type pre-body    {pre-arrow ...})
-    (type pre-type
-      pre-arrow
-      pre-jojo)
-    (type pre-lambda  pre-type pre-body)
+      var                ~
+      call               name
+      limited-call       name jojo
+      limited-apply      jo   jojo
+      arrow              ~
+      lambda             ~
+      ex-bind            jo   {var ...}
+      im-bind            jo   {var ...})
     #+end_src
 
 *** pre-jo
 
     #+begin_src scheme :tangle no
     (type pre-jo
-      pre-var
-      call
-      limited-call
-      limited-apply
-      pre-arrow
-      pre-lambda
-      pre-ex-bind
-      pre-im-bind)
+      pre-var            name
+      pre-call           name
+      pre-limited-call   name     pre-jojo
+      pre-limited-apply  pre-jo   pre-jojo
+      pre-arrow          pre-jojo pre-jojo
+      pre-lambda         pre-type pre-body
+      pre-ex-bind        pre-jo   {pre-var ...}
+      pre-im-bind        pre-jo   {pre-var ...})
 
-    (type pre-ex-bind pre-jo {pre-var ...})
-    (type pre-im-bind pre-jo {pre-var ...})
+    (type pre-type
+      pre-arrow          ~
+      pre-jojo           ~)
+
+    (type pre-jojo       {pre-jo ...})
+    (type pre-body       {pre-arrow ...})
     #+end_src
 
 *** meaning
 
     #+begin_src scheme :tangle no
     (type meaning
-      meaning-type-cons
-      meaning-data-cons
-      meaning-jojo
-      meaning-function)
-
-    (type meaning-type-cons pre-type name {name ...})
-    (type meaning-data-cons pre-type name name)
-    (type meaning-jojo      pre-type pre-jojo)
-    (type meaning-function  pre-type pre-body)
+      meaning-type-cons  pre-type name {name ...}
+      meaning-data-cons  pre-type name name
+      meaning-jojo       pre-type pre-jojo
+      meaning-function   pre-type pre-body)
     #+end_src
 
 *** stack
 
     #+begin_src scheme :tangle no
-    (type name-stack {(name . meaning) ...})
+    (type name-stack     {(name . meaning) ...})
 
-    (type data-stack {data ...})
+    (type data-stack     {data ...})
 
-    (type binding-stack {(id . ls) ...})
-    (type ls {(level . data) ...})
+    (type binding-stack  {(id . ls) ...})
+    (type ls             {(level . data) ...})
 
-    (type return-stack {(evaler . jojo) ...})
+    (type return-stack   {(evaler . jojo) ...})
     (type explainer
       explain
       type-explain)
@@ -236,22 +204,14 @@
         (and (list? v) (pair? v)
              (equal? (car v) (vector 'flower-barcket/as-im-bind))
              (member ': v)))
-      (cond [(var? jo)
-             (list 'pre-var jo)]
-            [(call? jo)
-             (list 'call jo)]
-            [(limited-call? jo)
-             (compile-limited-call jo)]
-            [(limited-apply? jo)
-             (compile-limited-apply jo)]
-            [(arrow? jo)
-             (compile-arrow jo)]
-            [(lambda? jo)
-             (compile-lambda jo)]
-            [(ex-bind? jo)
-             (compile-ex-bind jo)]
-            [(im-bind? jo)
-             (compile-im-bind (cdr jo))]))
+      (cond [(var? jo)                (list 'pre-var jo)]
+            [(call? jo)               (list 'pre-call jo)]
+            [(limited-call? jo)       (compile-limited-call jo)]
+            [(limited-apply? jo)      (compile-limited-apply jo)]
+            [(arrow? jo)              (compile-arrow jo)]
+            [(lambda? jo)             (compile-lambda jo)]
+            [(ex-bind? jo)            (compile-ex-bind jo)]
+            [(im-bind? jo)            (compile-im-bind (cdr jo))]))
     #+end_src
 
 *** compile-ex-bind
@@ -328,7 +288,7 @@
 
     #+begin_src scheme
     (define (compile-limited-call l)
-      (list 'limited-call
+      (list 'pre-limited-call
             (last l)
             (compile-jojo (drop-last l))))
     #+end_src
@@ -354,7 +314,7 @@
                (list (compile-jo last-jo))]
               [else
                (compile-jojo last-jo)]))
-      (list 'limited-apply
+      (list 'pre-limited-apply
             function-jojo
             (compile-jojo (drop-last l))))
     #+end_src
@@ -487,7 +447,179 @@
           (display "\n"))))
     #+end_src
 
-* >< unique-id
+* unique-copy
+
+*** id/new
+
+    #+begin_src scheme
+    (define id/counter 0)
+
+    (define (id/new n ls)
+      (set! id/counter (+ 1 id/counter))
+      (vector (cons n id/counter) ls))
+    #+end_src
+
+*** note
+
+    - pre-jo -> jo
+      var name -> unique id
+      implemented by scope passing
+
+*** unique-copy/pre-jojo
+
+    #+begin_src scheme
+    (define (unique-copy/pre-jojo pjj s)
+      (: pre-jojo scope -> {jojo scope})
+      (match pjj
+        [{} {{} s}]
+        [(pj . r)
+         (match (unique-copy/pre-jo pj s)
+           [{j s1}
+            (match (unique-copy/pre-jojo r s1)
+              [{jj s2}
+               {(cons j jj) s2}])])]))
+    #+end_src
+
+*** unique-copy/pre-type
+
+    #+begin_src scheme
+    (define (unique-copy/pre-type pt s)
+      (case (car pt)
+        ['pre-arrow (unique-copy/pre-arrow pt s)]
+        [else (unique-copy/pre-jojo pt s)]))
+    #+end_src
+
+*** unique-copy/pre-body
+
+    #+begin_src scheme
+    (define (unique-copy/pre-body pb s)
+      (match pb
+        [{} {{} s}]
+        [(pa . r)
+         (match (unique-copy/pre-arrow pa s)
+           [{a s1}
+            (match (unique-copy/pre-body r s1)
+              [{b s2}
+               {(cons a b) s2}])])]))
+    #+end_src
+
+*** unique-copy/pre-jo
+
+***** unique-copy/pre-jo
+
+      #+begin_src scheme
+      (define (unique-copy/pre-jo pj s)
+        (: pre-jo scope -> {jo scope})
+        (case (car pjj)
+          ['pre-var           (unique-copy/pre-var pj s)]
+          ['pre-call          (unique-copy/pre-call pj s)]
+          ['pre-limited-call  (unique-copy/pre-limited-call pj s)]
+          ['pre-limited-apply (unique-copy/pre-limited-apply pj s)]
+          ['pre-arrow         (unique-copy/pre-arrow pj s)]
+          ['pre-lambda        (unique-copy/pre-lambda pj s)]
+          ['pre-ex-bind       (unique-copy/pre-ex-bind pj s)]
+          ['pre-im-bind       (unique-copy/pre-im-bind pj s)]))
+      #+end_src
+
+***** unique-copy/pre-var
+
+      #+begin_src scheme
+      (define (unique-copy/pre-var pv s)
+        (match pv
+          [{'pre-var n}
+           (let ([found (assq n s)])
+             (if found
+               (let ([old-id (cdr found)])
+                 {{'var old-id} s})
+               (let ([new-id (id/new n '())])
+                 {{'var new-id}
+                  (cons (cons n new-id) s)})))]))
+      #+end_src
+
+***** unique-copy/pre-call
+
+      #+begin_src scheme
+      (define (unique-copy/pre-call pc s)
+        (match pc
+          [{'pre-call n}
+           {{'call n} s}]))
+      #+end_src
+
+***** unique-copy/pre-limited-call
+
+      #+begin_src scheme
+      (define (unique-copy/pre-limited-call pc s)
+        (match pc
+          [{'pre-limited-call n pjj}
+           (match (unique-copy/pre-jojo pjj s)
+             [{jj s1}
+              {{'limited-call n jj} s1}])]))
+      #+end_src
+
+***** unique-copy/pre-limited-apply
+
+      #+begin_src scheme
+      (define (unique-copy/pre-limited-apply pa s)
+        (match pa
+          [{'pre-limited-apply pj pjj}
+           (match (unique-copy/pre-jo pj s)
+             [[{j s1}]
+              (match (unique-copy/pre-jojo pjj s1)
+                [{jj s2}
+                 {{'limited-apply j jj} s2}])])]))
+      #+end_src
+
+***** unique-copy/pre-arrow
+
+      #+begin_src scheme
+      (define (unique-copy/pre-arrow pa s)
+        (match pa
+          [{'pre-arrow pjj1 pjj2}
+           (match (unique-copy/pre-jojo pjj1 s)
+             [[{jj1 s1}]
+              (match (unique-copy/pre-jojo pjj2 s1)
+                [{jj2 s2}
+                 {{'array jj1 jj2} s2}])])]))
+      #+end_src
+
+***** unique-copy/pre-lambda
+
+      #+begin_src scheme
+      (define (unique-copy/pre-lambda pl s)
+        (match pl
+          [{'pre-lambda pt pb}
+           (match (unique-copy/pre-type pt s)
+             [[{t s1}]
+              (match (unique-copy/pre-body pb s1)
+                [{b s2}
+                 {{'lambda t b} s2}])])]))
+      #+end_src
+
+***** unique-copy/pre-ex-bind
+
+      #+begin_src scheme
+      (define (unique-copy/pre-ex-bind pe s)
+        (match pe
+          [{'pre-ex-bind pj pvl}
+           (match (unique-copy/pre-jo pj s)
+             [[{j s1}]
+              (match (unique-copy/pre-jojo pvl s1)
+                [{vl s2}
+                 {{'ex-bind j vl} s2}])])]))
+      #+end_src
+
+***** unique-copy/pre-im-bind
+
+      #+begin_src scheme
+      (define (unique-copy/pre-im-bind pi s)
+        (match pi
+          [{'pre-im-bind pj pvl}
+           (match (unique-copy/pre-jo pj s)
+             [[{j s1}]
+              (match (unique-copy/pre-jojo pvl s1)
+                [{vl s2}
+                 {{'im-bind j vl} s2}])])]))
+      #+end_src
 
 * >< binding-stack
 

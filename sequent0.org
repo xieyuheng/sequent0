@@ -3,7 +3,18 @@
 
 * todo
 
-  - ><
+  - compile
+  - unique-id
+  - binding-stack
+    unify
+    cover
+  - return-stack
+    eval
+    type-eval
+  - data-stack
+    interface for trunk
+  - type-check
+  - compute
 
 * 記
 
@@ -157,7 +168,7 @@
       {'def/arar ty {ar ...} var-order})
     #+end_src
 
-* ><
+* stack
 
   #+begin_src scheme
   (define data-stack '())
@@ -165,3 +176,19 @@
   (define binding-stack '())
   (define name-stack '())
   #+end_src
+
+* >< compile
+
+*** define-type
+
+    #+begin_src scheme
+    (define-macro (define-type type )
+      )
+
+    (define-macro (match1 info e . cl)
+      (let ([v (gensym "match1/call-by-value/var")])
+        `(let ([,v ,e]) ;; to call by value
+           (match2 ,info ,v . ,cl))))
+    #+end_src
+
+*** define-function

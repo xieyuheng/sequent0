@@ -3,14 +3,15 @@
 
 * todo
 
-  - compile
   - unique-id
   - binding-stack
     unify
     cover
+    occur-check
+    consistent-check
   - return-stack
-    eval
-    type-eval
+    explain
+    type-explain
   - data-stack
     interface for trunk
   - type-check
@@ -56,7 +57,7 @@
 *** var & jojo & arrow & body & type
 
     #+begin_src scheme :tangle no
-    (type var     id level)
+    (type var     id)
     (type jojo    {jo ...})
     (type arrow   jojo jojo)
     (type body    {arrow ...})
@@ -96,26 +97,26 @@
     #+begin_src scheme :tangle no
     (type jo
       var
-      arrow
       call
       limited-call
       limited-apply
+      arrow
       lambda
       ex-bind
       im-bind)
 
     (type call name)
-    (type limited-call  name number)
-    (type limited-apply number)
+    (type limited-call  name jojo)
+    (type limited-apply jo jojo)
 
-    (type ex-bind var)
-    (type im-bind var)
+    (type ex-bind jo {var ...})
+    (type im-bind jo {var ...})
     #+end_src
 
 *** (pre) var & jojo & arrow & body & type
 
     #+begin_src scheme :tangle no
-    (type pre-var     name level)
+    (type pre-var     name)
     (type pre-jojo    {pre-jo ...})
     (type pre-arrow   pre-jojo pre-jojo)
     (type pre-body    {pre-arrow ...})
@@ -133,13 +134,13 @@
       call
       limited-call
       limited-apply
-      pre-lambda
       pre-arrow
+      pre-lambda
       pre-ex-bind
       pre-im-bind)
 
-    (type pre-ex-bind pre-var)
-    (type pre-im-bind pre-var)
+    (type pre-ex-bind pre-jo {pre-var ...})
+    (type pre-im-bind pre-jo {pre-var ...})
     #+end_src
 
 *** meaning
@@ -148,24 +149,29 @@
     (type meaning
       meaning-type-cons
       meaning-data-cons
+      meaning-jojo
       meaning-function)
 
     (type meaning-type-cons pre-type name {name ...})
     (type meaning-data-cons pre-type name name)
+    (type meaning-jojo      pre-type pre-jojo)
     (type meaning-function  pre-type pre-body)
     #+end_src
 
-*** >< env
+*** stack
 
     #+begin_src scheme :tangle no
-    (type bs {(id . ls) ...})
-    (type ns {(name . def) ...})
+    (type name-stack {(name . meaning) ...})
+
+    (type data-stack {data ...})
+
+    (type binding-stack {(id . ls) ...})
     (type ls {(level . data) ...})
-    (type def
-      {'def/type ty name {name ...}}
-      {'def/data ty name name}
-      {'def/jojo ty {jo ...} var-order}
-      {'def/arar ty {ar ...} var-order})
+
+    (type return-stack {(evaler . jojo) ...})
+    (type explainer
+      explain
+      type-explain)
     #+end_src
 
 * stack
@@ -175,20 +181,334 @@
   (define return-stack '())
   (define binding-stack '())
   (define name-stack '())
+
+  (define-macro (push stack value)
+    `(set! ,stack (cons ,value ,stack)))
   #+end_src
 
-* >< compile
+* compile
+
+*** help
+
+    #+begin_src scheme
+    (define (head->name head)
+      (car head))
+
+    (define (head->type head)
+      (cdr (cdr head)))
+    #+end_src
+
+*** compile-jo
+
+    #+begin_src scheme
+    (define (compile-jo jo)
+      (define (var? v)
+        (and (symbol? v)
+             (equal? ":" (substring (symbol->string v) 0 1))))
+      (define (call? v)
+        (and (symbol? v)
+             (not (eq? ":" (substring (symbol->string v) 0 1)))))
+      (define (limited-call? v)
+        (and (list? v)
+             (not (member '-> v))
+             (not (eq? (car v) 'lambda))
+             (not (member ': v))
+             (symbol? (last v))
+             (not (var? (last v)))))
+      (define (limited-apply? v)
+        (and (list? v)
+             (not (member '-> v))
+             (not (eq? (car v) 'lambda))
+             (not (member ': v))
+             (or (not (symbol? (last v)))
+                 (var? (last v)))))
+      (define (arrow? v)
+        (and (list? v)
+             (member '-> v)))
+      (define (lambda? v)
+        (and (list? v)
+             (eq? (car v) 'lambda)))
+      (define (ex-bind? v)
+        (and (list? v) (pair? v)
+             (not (equal? (car v) (vector 'flower-barcket/as-im-bind)))
+             (member ': v)))
+      (define (im-bind? v)
+        (and (list? v) (pair? v)
+             (equal? (car v) (vector 'flower-barcket/as-im-bind))
+             (member ': v)))
+      (cond [(var? jo)
+             (list 'pre-var jo)]
+            [(call? jo)
+             (list 'call jo)]
+            [(limited-call? jo)
+             (compile-limited-call jo)]
+            [(limited-apply? jo)
+             (compile-limited-apply jo)]
+            [(arrow? jo)
+             (compile-arrow jo)]
+            [(lambda? jo)
+             (compile-lambda jo)]
+            [(ex-bind? jo)
+             (compile-ex-bind jo)]
+            [(im-bind? jo)
+             (compile-im-bind (cdr jo))]))
+    #+end_src
+
+*** compile-ex-bind
+
+    #+begin_src scheme
+    (define (compile-ex-bind jo)
+      (list 'pre-ex-bind
+            (compile-jo (car (right-of ': jo)))
+            (compile-jojo (left-of ': jo))))
+    #+end_src
+
+*** compile-im-bind
+
+    #+begin_src scheme
+    (define (compile-im-bind jo)
+      (list 'pre-im-bind
+            (compile-jo (car (right-of ': jo)))
+            (compile-jojo (left-of ': jo))))
+    #+end_src
+
+*** compile-jojo
+
+    #+begin_src scheme
+    (define (compile-jojo jojo)
+      (map compile-jo jojo))
+    #+end_src
+
+*** compile-arrow
+
+    #+begin_src scheme
+    (define (compile-arrow arrow)
+      (list 'pre-arrow
+            (compile-jojo (left-of '-> arrow))
+            (compile-jojo (right-of '-> arrow))))
+    #+end_src
+
+*** compile-type
+
+    #+begin_src scheme
+    (define (compile-type type)
+      (define (arrow? s)
+        (and (eq? (length s) 1)
+             (list? (car s))
+             (member '-> (car s))))
+      (cond [(arrow? type)
+             (compile-arrow (car type))]
+            [else
+             (list 'pre-jojo (compile-jojo type))]))
+    #+end_src
+
+*** compile-body
+
+    #+begin_src scheme
+    (define (compile-body body)
+      (map compile-arrow body))
+    #+end_src
+
+*** compile-lambda
+
+    #+begin_src scheme
+    (define (compile-lambda lambda)
+      (list 'pre-lambda
+            (compile-type (car (cdr lambda)))
+            (compile-body (cdr (cdr lambda)))))
+    #+end_src
+
+*** compile-limited-call
+
+    - note the
+      nested (jo ... name) in (jo ... (jo ... name))
+      is not limited-call but limited-apply
+      becaus such limited-call shoule be written as
+      (jo ... jo ... name)
+
+    #+begin_src scheme
+    (define (compile-limited-call l)
+      (list 'limited-call
+            (last l)
+            (compile-jojo (drop-last l))))
+    #+end_src
+
+*** compile-limited-apply
+
+    #+begin_src scheme
+    (define (compile-limited-apply l)
+      (define (var? v)
+        (and (symbol? v)
+             (equal? ":" (substring (symbol->string v) 0 1))))
+      (define (arrow? v)
+        (and (list? v)
+             (member '-> v)))
+      (define (lambda? v)
+        (and (list? v)
+             (eq? (car v) 'lambda)))
+      (define last-jo (last l))
+      (define function-jojo
+        (cond [(or (var? last-jo)
+                   (arrow? last-jo)
+                   (lambda? last-jo))
+               (list (compile-jo last-jo))]
+              [else
+               (compile-jojo last-jo)]))
+      (list 'limited-apply
+            function-jojo
+            (compile-jojo (drop-last l))))
+    #+end_src
+
+*** flower-barcket/as-im-bind
+
+    #+begin_src scheme
+    (define (flower-barcket/as-im-bind body)
+      (flower-barcket
+       (lambda (dl)
+         (cons (vector 'flower-barcket/as-im-bind)
+               dl))
+       body))
+    #+end_src
+
+*** print-define+ & print-define-
+
+    #+begin_src scheme
+    (define print-define-flag #f)
+    (define (print-define+) (set! print-define-flag #t))
+    (define (print-define-) (set! print-define-flag #f))
+    #+end_src
+
+*** define-jojo
+
+    #+begin_src scheme
+    (define-macro (define-jojo . body)
+      `(define-jojo1 . ,(flower-barcket/as-im-bind body)))
+
+    (define-macro (define-jojo head . tail)
+      `($define-jojo (quote ,head) (quote ,tail)))
+
+    (define ($define-jojo head tail)
+      (define name (head->name head))
+      (define meaning
+        (list 'meaning-jojo
+              (compile-type (head->type head))
+              (compile-jojo tail)))
+      (push name-stack
+            (cons name meaning))
+      (if print-define-flag
+        (let ()
+          (display "\n")
+          (display "<define-jojo>\n")
+          (display ":name: ") (display name) (display "\n")
+          (display ":meaning:\n")
+          (display meaning) (display "\n")
+          (display "</define-jojo>\n")
+          (display "\n"))))
+    #+end_src
+
+*** define-function
+
+    #+begin_src scheme
+    (define-macro (define-function . body)
+      `(define-function1 . ,(flower-barcket/as-im-bind body)))
+
+    (define-macro (define-function1 head . tail)
+      `($define-function (quote ,head) (quote ,tail)))
+
+    (define ($define-function head tail)
+      (define name (head->name head))
+      (define meaning
+        (list 'meaning-function
+              (compile-type (head->type head))
+              (compile-body tail)))
+      (push name-stack
+            (cons name meaning))
+      (if print-define-flag
+        (let ()
+          (display "\n")
+          (display "<define-function>\n")
+          (display ":name: ") (display name) (display "\n")
+          (display ":meaning:\n")
+          (display meaning) (display "\n")
+          (display "</define-function>\n")
+          (display "\n"))))
+    #+end_src
 
 *** define-type
 
     #+begin_src scheme
-    (define-macro (define-type type )
-      )
+    (define-macro (define-type . body)
+      `(define-type1 . ,(flower-barcket/as-im-bind body)))
 
-    (define-macro (match1 info e . cl)
-      (let ([v (gensym "match1/call-by-value/var")])
-        `(let ([,v ,e]) ;; to call by value
-           (match2 ,info ,v . ,cl))))
+    (define-macro (define-type1 head . tail)
+      `($define-type (quote ,head) (quote ,tail)))
+
+    (define ($define-type head tail)
+      (define name (head->name head))
+      (define data-name-list (map car tail))
+      (define meaning
+        (list 'meaning-type-cons
+              (compile-type (head->type head))
+              name
+              data-name-list))
+      (push name-stack
+            (cons name meaning))
+      (if print-define-flag
+        (let ()
+          (display "\n")
+          (display "<define-type>\n")
+          (display ":name: ") (display name) (display "\n")
+          (display ":meaning:\n")
+          (display meaning) (display "\n")
+          (display "</define-type>\n")
+          (display "\n")))
+      (map (lambda (h)
+             ($define-data h name))
+        tail)
+      (void))
+
+    (define ($define-data head type-name)
+      (define name (head->name head))
+      (define meaning
+        (list 'meaning-data-cons
+              (compile-type (head->type head))
+              name
+              type-name))
+      (push name-stack
+            (cons name meaning))
+      (if print-define-flag
+        (let ()
+          (display "\n")
+          (display "<define-data>\n")
+          (display ":name: ") (display name) (display "\n")
+          (display ":meaning:\n")
+          (display meaning) (display "\n")
+          (display "</define-data>\n")
+          (display "\n"))))
     #+end_src
 
-*** define-function
+* >< unique-id
+
+* >< binding-stack
+
+*** occur-check
+
+*** consistent-check
+
+*** unify
+
+*** cover
+
+* >< return-stack
+
+*** explain
+
+*** type-explain
+
+* >< data-stack
+
+*** interface for trunk
+
+* >< type-check
+
+* >< compute

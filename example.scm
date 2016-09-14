@@ -37,7 +37,8 @@
   (:m :n succ -> :m :n add succ))
 
 (define-type (eq : ({:t : type} :t :t -> type))
-  refl ({:t : type} {:d : :t} -> :d :d eq))
+  (refl : ({:t : type} {:d : :t} -> :d :d eq)))
+
 
 (define-function (eq/test : (-> zero zero add zero zero add eq))
   (-> refl))
@@ -121,8 +122,8 @@
   (:m :n succ -> :m :n mul :m add))
 
 (define-type (list : (type -> type))
-  null (-> :t list)
-  cons (:t list :t -> :t list))
+  (null : (-> :t list))
+  (cons : (:t list :t -> :t list)))
 
 (define-function (append : (:t list :t list -> :t list))
   (:l null -> :l)
@@ -162,8 +163,8 @@
   (:m :n succ -> :m :n mul :m add))
 
 (define-type (list : (type -> type))
-  null (-> :t list)
-  cons (:t list :t -> :t list))
+  (null : (-> :t list))
+  (cons : (:t list :t -> :t list)))
 
 (define-function (append : (:t list :t list -> :t list))
   (:l null -> :l)
@@ -195,8 +196,8 @@
       map))
 
 (define-type (has-length : (:t list natural -> type))
-  null/has-length (-> null zero has-length)
-  cons/has-length (:l :n has-length -> :l :a cons :n succ has-length))
+  (null/has-length : (-> null zero has-length))
+  (cons/has-length : (:l :n has-length -> :l :a cons :n succ has-length)))
 
 (define-function
     (map/has-length : (:l :n has-length -> :l :f map :n has-length))
@@ -230,8 +231,8 @@
   (:m :n succ -> :m :n mul :m add))
 
 (define-type (vector : (natural type -> type))
-  null (-> zero :t vector)
-  cons (:n :t vector :t -> :n succ :t vector))
+  (null : (-> zero :t vector))
+  (cons : (:n :t vector :t -> :n succ :t vector)))
 
 (define-function (append : (:m :t vector :n :t vector -> :m :n add :t vector))
   (:l null -> :l)
@@ -261,8 +262,8 @@
   (:m :n succ -> :m :n mul :m add))
 
 (define-type (vector : (natural type -> type))
-  null (-> zero :t vector)
-  cons (:n :t vector :t -> :n succ :t vector))
+  (null : (-> zero :t vector))
+  (cons : (:n :t vector :t -> :n succ :t vector)))
 
 (define-function (append : (:m :t vector :n :t vector -> :m :n add :t vector))
   (:l null -> :l)

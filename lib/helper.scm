@@ -97,6 +97,18 @@
   (: (element -> bool) l -> bool)
   (member #t (map p? l)))
 
+(define (last l)
+  (cond [(eq? '() (cdr l))
+         (car l)]
+        [else
+         (last (cdr l))]))
+
+(define (drop-last l)
+  (cond [(eq? '() (cdr l))
+         '()]
+        [else
+         (cons (car l) (drop-last (cdr l)))]))
+
 (define (sexp->string s)
   (format #f "~a" s))
 

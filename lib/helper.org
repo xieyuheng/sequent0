@@ -137,6 +137,22 @@
       (member #t (map p? l)))
     #+end_src
 
+*** last & drop-last
+
+    #+begin_src scheme
+    (define (last l)
+      (cond [(eq? '() (cdr l))
+             (car l)]
+            [else
+             (last (cdr l))]))
+
+    (define (drop-last l)
+      (cond [(eq? '() (cdr l))
+             '()]
+            [else
+             (cons (car l) (drop-last (cdr l)))]))
+    #+end_src
+
 * sexp
 
   #+begin_src scheme

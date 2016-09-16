@@ -153,6 +153,18 @@
              (cons (car l) (drop-last (cdr l)))]))
     #+end_src
 
+*** list-sub
+
+    #+begin_src scheme
+    (define (list-sub l1 l2)
+      (cond [(eq? l1 '())
+             '()]
+            [(eq? l1 l2)
+             '()]
+            [else
+             (cons (car l1) (list-sub (cdr l1) l2))]))
+    #+end_src
+
 * sexp
 
   #+begin_src scheme

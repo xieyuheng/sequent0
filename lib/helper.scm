@@ -109,6 +109,14 @@
         [else
          (cons (car l) (drop-last (cdr l)))]))
 
+(define (list-sub l1 l2)
+  (cond [(eq? l1 '())
+         '()]
+        [(eq? l1 l2)
+         '()]
+        [else
+         (cons (car l1) (list-sub (cdr l1) l2))]))
+
 (define (sexp->string s)
   (format #f "~a" s))
 

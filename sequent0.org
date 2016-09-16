@@ -3,6 +3,8 @@
 
 * todo
 
+  - compose
+  - cut
   - binding-stack
     unify
     cover
@@ -13,47 +15,18 @@
     type-explain
   - data-stack
     interface for trunk
-  - type-check
-  - compute
-
-* 記
-
-  - 回到 stack-based 的實現方式
-    以明確 cut 在實現中的出現
-    要知道
-    形成 trunk 是因爲 branch
-    而 cut 中不會出現 branch
-
-  - 使用完全的 threaded-code-interpreter
-    包括 return-stack
-    不同的 context 就是不同的 return-stack 處理函數
-
-  - 用完全不同的方式來處理 eq 而不計較理論特性
-    cut 中 data uni (uni at level-0) 而 type cover
-    可以解決 eq 的對稱性問題
-    也能解決 (-> (:d : A) :d P) 的問題
-    這樣出現 uni 的地方就有兩處
-    一爲如上
-    另一爲 branch 的 antecedent 對 type 的 antecedent 的特化
-
-  - 可以用遞歸函數來證明 trunk 之間的 eq
-    因此 eq 可以用來 rewrite trunk
-    因此 eq 也可以用來 rewrite data
-
-  - trunk 可以在 compute 中出現
-    需要在 stack 中加入 interface 處理 trunk
-    每次遇到 trunk 都嘗試 rewrite
-
-  - 分離處理如下四種情況
-    |      | type-check | compute |
-    |------+------------+---------|
-    | jo   |            |         |
-    | data |            |         |
-    jo 不爲 call 優化而直接用 (<tag> ~)
 
 * note
 
-*** data
+*** terminology
+
+    | element | list of elements |
+    |---------+------------------|
+    | jo      | jojo             |
+    | data    | data-list        |
+    | arrow   | body             |
+
+*** data & jo
 
     #+begin_src scheme :tangle no
     (type data
@@ -61,8 +34,14 @@
       cons               name {data ...}
       arrow              jojo jojo
       lambda             type body
-      bind               data var
-      trunk              type trunk-body {data ...} index)
+      name-curry         name {data ...} input-number
+      jo-curry           jo   {data ...} input-number
+      bind               data sub-data
+      trunk              type (vector trunky) index)
+
+    (type trunky
+      todo               body {data ...}
+      done               {data ...})
 
     (type type
       arrow              ~
@@ -71,31 +50,22 @@
     (type jojo           {jo ...})
     (type body           {arrow ...})
 
-    (type trunk-body
-      trunk-name         name
-      trunk-var          var
-      trunk-arrow-list   {arrow ...})
-
     (type id             (vector (name . counter) ls))
     ;; vector thus unique
-    ;; ls (level binding-list) for commit
-    #+end_src
+    ;; ls (level binding-list) in id for commit
 
-*** jo
-
-    #+begin_src scheme :tangle no
     (type jo
       var                ~
       call               name
-      limited-call       name jojo
-      limited-apply      jo   jojo
       arrow              ~
       lambda             ~
-      ex-bind            jo   {var ...}
-      im-bind            jo   {var ...})
+      limited-call       name jojo
+      limited-apply      jo   jojo
+      ex-bind            jo   jojo
+      im-bind            jo   jojo)
     #+end_src
 
-*** pre-jo
+*** pre-jo & meaning
 
     #+begin_src scheme :tangle no
     (type pre-jo
@@ -105,8 +75,8 @@
       pre-limited-apply  pre-jo   pre-jojo
       pre-arrow          pre-jojo pre-jojo
       pre-lambda         pre-type pre-body
-      pre-ex-bind        pre-jo   {pre-var ...}
-      pre-im-bind        pre-jo   {pre-var ...})
+      pre-ex-bind        pre-jo   pre-jojo
+      pre-im-bind        pre-jo   pre-jojo)
 
     (type pre-type
       pre-arrow          ~
@@ -114,11 +84,7 @@
 
     (type pre-jojo       {pre-jo ...})
     (type pre-body       {pre-arrow ...})
-    #+end_src
 
-*** meaning
-
-    #+begin_src scheme :tangle no
     (type meaning
       meaning-type-cons  pre-type name {name ...}
       meaning-data-cons  pre-type name name
@@ -129,29 +95,41 @@
 *** stack
 
     #+begin_src scheme :tangle no
-    (type name-stack     {(name . meaning) ...})
+    (type ns {(name . meaning) ...})
 
-    (type data-stack     {data ...})
+    (type ds {data ...})
 
-    (type binding-stack  {(id . ls) ...})
-    (type ls             {(level . data) ...})
+    (type bs {(id . ls) ...})
+    (type ls {(level . data) ...})
 
-    (type return-stack   {(evaler . jojo) ...})
-    (type explainer
-      explain
-      type-explain)
+    (type rs {{counter explainer ender jojo} ...})
+    (type gs {{counter explainer ender {data-list data-list}} ...})
     #+end_src
 
 * stack
 
   #+begin_src scheme
-  (define data-stack '())
-  (define return-stack '())
-  (define binding-stack '())
-  (define name-stack '())
+  (define ns '())
+  (define ds '())
+  (define bs '())
+  (define rs '())
+  (define gs '())
 
-  (define-macro (push stack value)
-    `(set! ,stack (cons ,value ,stack)))
+  (define-macro (push s v) `(set! ,s (cons ,v ,s)))
+  (define-macro (put s l)
+    `(set! ,s (append ,l ,s)))
+
+  (define-macro (tos s)    (car s))
+  (define-macro (pop s)
+    (let ([v (gensym "pop/v")])
+      `(let ([,v (car ,s)])
+         (set! ,s (cdr ,s))
+         v)))
+  (define-macro (fetch s n)
+    (let ([v (gensym "fetch/v")])
+      `(let ([,v (take ,s n)])
+         (set! ,s (drop ,s n))
+         v)))
   #+end_src
 
 * compile
@@ -353,8 +331,7 @@
         (list 'meaning-jojo
               (compile-type (head->type head))
               (compile-jojo tail)))
-      (push name-stack
-            (cons name meaning))
+      (push ns (cons name meaning))
       (if print-define-flag
         (let ()
           (display "\n")
@@ -381,8 +358,7 @@
         (list 'meaning-function
               (compile-type (head->type head))
               (compile-body tail)))
-      (push name-stack
-            (cons name meaning))
+      (push ns (cons name meaning))
       (if print-define-flag
         (let ()
           (display "\n")
@@ -411,8 +387,7 @@
               (compile-type (head->type head))
               name
               data-name-list))
-      (push name-stack
-            (cons name meaning))
+      (push ns (cons name meaning))
       (if print-define-flag
         (let ()
           (display "\n")
@@ -434,8 +409,7 @@
               (compile-type (head->type head))
               name
               type-name))
-      (push name-stack
-            (cons name meaning))
+      (push ns (cons name meaning))
       (if print-define-flag
         (let ()
           (display "\n")
@@ -600,12 +574,12 @@
       #+begin_src scheme
       (define (unique-copy/pre-ex-bind pe s)
         (match pe
-          [{'pre-ex-bind pj pvl}
+          [{'pre-ex-bind pj pjj}
            (match (unique-copy/pre-jo pj s)
              [[{j s1}]
-              (match (unique-copy/pre-jojo pvl s1)
-                [{vl s2}
-                 {{'ex-bind j vl} s2}])])]))
+              (match (unique-copy/pre-jojo pjj s1)
+                [{jj s2}
+                 {{'ex-bind j jj} s2}])])]))
       #+end_src
 
 ***** unique-copy/pre-im-bind
@@ -613,34 +587,724 @@
       #+begin_src scheme
       (define (unique-copy/pre-im-bind pi s)
         (match pi
-          [{'pre-im-bind pj pvl}
+          [{'pre-im-bind pj pjj}
            (match (unique-copy/pre-jo pj s)
              [[{j s1}]
-              (match (unique-copy/pre-jojo pvl s1)
-                [{vl s2}
-                 {{'im-bind j vl} s2}])])]))
+              (match (unique-copy/pre-jojo pjj s1)
+                [{jj s2}
+                 {{'im-bind j jj} s2}])])]))
       #+end_src
 
-* >< binding-stack
+* bs
 
-*** occur-check
+*** bs/commit & id/commit
 
-*** consistent-check
+    #+begin_src scheme
+    (define (bs/commit)
+      (define (recur bs0)
+        (cond [(equal? '(commit-point) (car bs0))
+               (set! bs (cdr bs0))]
+              [else
+               (let ([id (car (car bs0))]
+                     [ls (cdr (car bs0))])
+                 (id/commit id ls)
+                 (recur (cdr bs0)))]))
+      (recur bs))
 
-*** unify
+    (define (id/commit id ls)
+      (: id ls -> id [with effect on id])
+      (let ()
+        (vector-set! id 1 (append ls (vector-ref id 1)))
+        id))
+    #+end_src
+
+*** bs/extend-level-0 & bs/extend-level-1
+
+    #+begin_src scheme
+    (define (bs/extend-level-0 v d)
+      (: var data -> !)
+      (match v
+        [{'var id}
+         (let ([level 0]
+               [found/ls (assq id bs)])
+           (if found/ls
+             (set! bs (substitute `(,id . ((,level . ,d) . ,(cdr found/ls)))
+                                  (lambda (pair) (eq? (car pair) id))
+                                  bs))
+             (push bs `(,id . ((,level . ,d))))))]))
+
+    (define (bs/extend-level-1 v d)
+      (: var data -> !)
+      (match v
+        [{'var id}
+         (let ([level 1]
+               [found/ls (assq id bs)])
+           (if found/ls
+             (set! bs (substitute `(,id . ((,level . ,d) . ,(cdr found/ls)))
+                                  (lambda (pair) (eq? (car pair) id))
+                                  bs))
+             (push bs `(,id . ((,level . ,d))))))]))
+    #+end_src
+
+*** var/fresh?
+
+    #+begin_src scheme
+    (define (var/fresh? v)
+      (: var -> bool)
+      (equal? (bs/walk v)
+              v))
+    #+end_src
+
+*** bs/find
+
+    #+begin_src scheme
+    (define (id->ls id)
+      (vector-ref id 1))
+
+    (define (bs/find v)
+      (: var -> (or data #f))
+      (match v
+        [{'var id}
+         (let* ([level 0]
+                [found/commit (assq level (id->ls id))])
+           (if found/commit
+             (cdr found/commit)
+             (let* ([found/ls (assq id bs)]
+                    [found/bind
+                     (if found/ls
+                       (assq level (cdr found/ls))
+                       #f)])
+               (if found/bind
+                 (cdr found/bind)
+                 #f))))]))
+    #+end_src
+
+*** bs/walk
+
+    #+begin_src scheme
+    (define (bs/walk d)
+      (: data -> data)
+      (match d
+        [{'var id}
+         (let ([found (bs/find d)])
+           (if found
+             (bs/walk found)
+             d))]
+        [{__ e} d]))
+    #+end_src
+
+*** bs/deep
+
+    #+begin_src scheme
+    (define (bs/deep d)
+      (: data -> data)
+      (let ([d (bs/walk d)])
+        (match d
+          ;; a var is fresh after bs/walk
+          [{'cons n dl}          {'cons n (bs/deep-list dl)}]
+          [{'bind d sd}          {'bind (bs/deep d) (bs/deep sd)}]
+          [{'name-curry n dl i}  {'name-curry n (bs/deep-list dl) i}]
+          [{'jo-curry n dl i}    {'jo-curry n (bs/deep-list dl) i}]
+          [{'trunk t k i}        {'trunk t (bs/deep-trunky k) i}]
+          [__                    d])))
+
+    (define (bs/deep-list dl)
+      (map (lambda (x) (bs/deep x)) dl))
+
+    (define (bs/deep-trunky k)
+      (vector-set!
+        k 0
+        (match (vector-ref k 0)
+          [{'todo b dl} {'todo b (bs/deep-list dl)}]
+          [{'done dl}   {'done (bs/deep-list dl)}])))
+    #+end_src
+
+* gs
+
+*** note goal-stack
+
+    - binding-stack is to record solution of equations in goal-stack
+
+*** gs/exit
+
+    #+begin_src scheme
+    (define (gs/exit) (void))
+    #+end_src
+
+*** gs/next
+
+    #+begin_src scheme
+    (define (gs/next)
+      (match (tos gs)
+        [{c ex end {dl1 dl2}}
+         (ex)]))
+    #+end_src
+
+*** >< occur-check
+
+*** >< consistent-check
+
+* cover
+
+*** note
+
+    - cover is the poset structure of term-lattice (subsumption-lattice)
 
 *** cover
 
-* >< return-stack
+    #+begin_src scheme
+    (define (cover)
+      (: -> bool)
+      (match (pop gs)
+        [{c ex end {dl1 dl2}}
+         (cond [(>= c (length dl1))
+                (end)
+                #t]
+               [else
+                (let ([d1 (list-ref dl1 c)]
+                      [d2 (list-ref dl2 c)])
+                  (push {(+ 1 c) ex end {dl1 dl2}})
+                  (if (cover/data/data d1 d2)
+                    (gs/next)
+                    #f))])]))
+    #+end_src
 
-*** explain
+*** cover/data/data
 
-*** type-explain
+    #+begin_src scheme
+    (define (cover/data/data d1 d2)
+      (: data data -> bool)
+      ;; var -walk-> fresh-var
+      (let ([d1 (bs/walk d1)]
+            [d2 (bs/walk d2)])
+        (match {d1 d2}
+          ;; level-0 unify
+          [{'bind d v}])))
 
-* >< data-stack
+    (let ([p (bs/walk bs p)]
+          [d (bs/walk bs d)])
+      (match {p d}
+        [{{'bind {__ p0}} __} (cover/data p0 d e)]
+        [{__ {'bind {__ d0}}} (cover/data p d0 e)]
+        [{{'var v1} {'var v2}}
+         (if (var/eq? v1 v2)
+           {'success e}
+           (cover/var/data v1 d e))]
+        [{{'var v} __} (cover/var/data v d e)]
+        [{__ {'var v}}
+         ;; here is the only different between unify/data
+         {'fail {`(cover/data
+                   fail because non-var can never cover var
+                   (pattern: ,p)
+                   (data: ,d))}}]
+        [{{'trunk t1} {'trunk t2}} (cover/trunk t1 t2 e)]
+        [{{'trunk t} __} (cover/trunk/data t d e)]
+        [{__ {'trunk t}} (cover/trunk/data t p e)]
 
-*** interface for trunk
+        [{{'cons c1} {'cons c2}} (cover/cons c1 c2 e)]
+        [{{'arrow a1} {'arrow a2}} (cover/arrow a1 a2 e)]
+        [{{'lambda l1} {'lambda l2}} (cover/lambda l1 l2 e)]
+        [{__ __}
+         {'fail {`(cover/data
+                   fail to unify
+                   (pattern: ,p) (data: ,d))}}]))
+    #+end_src
 
-* >< type-check
+*** cover/data-list/data-list
 
-* >< compute
+    #+begin_src scheme
+    (define (cover/data-list/data-list dl1 dl2)
+      (condfor-each cover/data/data jj))
+
+    #+end_src
+
+*** cover/
+
+    #+begin_src scheme
+
+    #+end_src
+
+* >< unify
+
+*** note
+
+    - this is the meet (greatest lower bound) operation of term-lattice
+
+    - first order syntactic unification
+
+    - for unify/trunk
+      first syntactic unification is tried
+      if it fail
+      semantic unification is used
+
+    - except for unify/trunk/data
+      semantic unification (unification modulo theory) is tried
+      (try trunk -> redex)
+      (computation can occur in type-check)
+
+    - no substitutional equality
+      (can use proved '=' to get explicit substitutional equality)
+
+*** ><><>< unify
+
+    #+begin_src scheme
+
+    #+end_src
+
+*** ><
+
+    #+begin_src scheme
+
+    #+end_src
+
+* rs
+
+*** rs/exit
+
+    #+begin_src scheme
+    (define (rs/exit) (void))
+    #+end_src
+
+*** rs/next
+
+    #+begin_src scheme
+    (define (rs/next)
+      (match (tos rs)
+        [{c ex end jj}
+         (ex)]))
+    #+end_src
+
+* compose
+
+*** compose
+
+    #+begin_src scheme
+    (define (compose)
+      (match (pop rs)
+        [{c ex end jj}
+         (cond [(>= c (length jj))
+                (end)]
+               [else
+                (let ([j (list-ref jj c)])
+                  (push {(+ 1 c) ex end jj})
+                  (compose/jo (car j))
+                  (rs/next))])]))
+    #+end_src
+
+*** compose/jo
+
+    #+begin_src scheme
+    (define (compose/jo j)
+      (case (car j)
+        ['var           (compose/var j)]
+        ['call          (compose/call j)]
+        ['limited-call  (compose/limited-call j)]
+        ['limited-apply (compose/limited-apply j)]
+        ['arrow         (push ds j)]
+        ['lambda        (push ds j)]
+        ['ex-bind       (compose/ex-bind j)]
+        ['im-bind       (compose/im-bind j)]))
+    #+end_src
+
+*** ><><>< compose/jojo
+
+    - ><><>< maybe do not need this
+
+    #+begin_src scheme
+    (define (compose/jojo jj) (for-each compose/jo jj))
+    #+end_src
+
+*** ><><>< compose/var
+
+    - extend bs whenever meet a new var
+      this helps commit
+
+    #+begin_src scheme
+    (define (compose/var j)
+      (let ([d (bs/deep j)])
+        (push ds d)
+        ;; (match d
+        ;;   [{'trunk t k i}
+        ;;    ;; try trunk -> redex
+        ;;    (push ds ><><><)]
+        ;;   [__
+        ;;    (push ds d)])
+        ))
+    #+end_src
+
+*** type/input-number & type/output-number
+
+    - it is assumed that jojo as type do not eat data-stack
+
+    #+begin_src scheme
+    (define (type/input-number t)
+      (match t
+        [{'arrow ajj sjj}
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jojo ajj)
+                      (ds/gather-right dp))])
+           (length dl))]
+        [jj
+         0]))
+
+    (define (type/output-number t)
+      (match t
+        [{'arrow ajj sjj}
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jojo sjj)
+                      (ds/gather-right dp))])
+           (length dl))]
+        [jj
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jojo jj)
+                      (ds/gather-right dp))])
+           (length dl))]))
+    #+end_src
+
+*** compose/call
+
+    - [for the first covering arrow]
+      #+begin_src scheme :tangle no
+      <data-on-the-stack>
+      <point>
+      (push rs {compose exit <antecedent>})
+      <ds/gather>
+      (push gs {cover commit <gathered>})
+      succ -> commit (<loop>)
+      fail -> undo
+      (push rs {compose exit <succedent>})
+      all fail -> form trunk
+      #+end_src
+
+    #+begin_src scheme
+    (define (compose/call j)
+      (match j
+        [{'call n}
+         (let ([found (assq n ns)])
+           (if (not found)
+             (orz 'compose/call ("unknow name : ~a~%" n))
+             (match (cdr found)
+               [{'meaning-type-cons pt n nl}
+                (let ([len (type/input-number (unique-copy/pre-type pt))])
+                  (push ds {'cons n (fetch ds len)}))]
+               [{'meaning-data-cons pt n n0}
+                (let ([len (type/input-number (unique-copy/pre-type pt))])
+                  (push ds {'cons n (fetch ds len)}))]
+               [{'meaning-jojo pt pjj}
+                (push rs {0 compose rs/next (unique-copy/pre-jojo pjj '())})]
+               [{'meaning-function pt pb}
+                (let ([sjj (compose/try-to-get-succedent
+                            (unique-copy/pre-body pb '()))])
+                  (if sjj
+                    (push rs {0 compose rs/next sjj})
+                    (let* ([t (unique-copy/pre-type pt)]
+                           [b (unique-copy/pre-body pb)]
+                           [dl (fetch ds (type/input-number t))])
+                      (put ds (create-trunk-list t b dl)))))])))]))
+
+    (define (create-trunk-list t b dl)
+      (let ([k (vector {'todo b dl})])
+        (reverse
+         (map (lambda (i) {'trunk t k i})
+           (genlist
+            (type/output-number
+             (unique-copy/pre-type pt)))))))
+
+    (define (compose/try-to-get-succedent b)
+      (match b
+        [{} #f]
+        [({'arrow ajj sjj} . r)
+         (let ([ds0 ds]
+               [gs0 gs]
+               [bs0 bs])
+           (push rs {0 compose rs/exit ajj})
+           (rs/next)
+           (push bs '(commit-point))
+           (push gs {0 cover bs/commit (ds/gather ds0)})
+           (if (gs/next)
+             sjj
+             (begin
+               (set! ds ds0)
+               (set! gs gs0)
+               (set! bs bs0)
+               (compose/try-to-get-succedent r))))]))
+    #+end_src
+
+*** compose/limited-call
+
+    #+begin_src scheme
+    (define (compose/limited-call j)
+      (match j
+        [{'limited-call n jj}
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jojo jj)
+                      (ds/gather-right dp))]
+                [actual-number (length dl)]
+                [input-number
+                 (let ([found (assq n ns)])
+                   (if (not found)
+                     (orz 'compose/limited-call ("unknow name : ~a~%" n))
+                     (match (cdr found)
+                       [{'meaning-type-cons pt n nl}
+                        (type/input-number (unique-copy/pre-type pt))]
+                       [{'meaning-data-cons pt n n0}
+                        (type/input-number (unique-copy/pre-type pt))]
+                       [{'meaning-jojo pt pjj}
+                        (type/input-number (unique-copy/pre-type pt))]
+                       [{'meaning-function pt pb}
+                        (type/input-number (unique-copy/pre-type pt))])))])
+           (cond [(>= actual-number input-number)
+                  (put ds dl)
+                  (compose/call {'call n})]
+                 [(< actual-number input-number)
+                  (push ds {'name-curry n dl
+                                        (- input-number actual-number)})]))]))
+    #+end_src
+
+*** ><><>< data/input-number
+
+    #+begin_src scheme
+    (define (data/input-number d)
+      (match d
+        ;; ><><><
+        ;; [{'var id} only need the type of var]
+        [{'arrow ajj sjj}
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jojo ajj)
+                      (ds/gather-right dp))])
+           (length dl))]
+        [{'lambda t b}
+         (type/input-number t)]
+        [{'name-curry n dl input-number}
+         input-number]
+        [{'jo-curry jo dl input-number}
+         input-number]
+        [{__
+          (orz 'data/input-number
+            ("can not get input-number of data :~a~%" d))}]))
+    #+end_src
+
+*** compose/limited-apply
+
+    #+begin_src scheme
+    (define (compose/limited-apply j)
+      (match j
+        [{'limited-apply j jj}
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jojo jj)
+                      (ds/gather-right dp))]
+                [actual-number (length dl)]
+                [dl1 (let ()
+                       (compose/jo j)
+                       (ds/gather-right dp))]
+                [input-number
+                 (if (not (eq? (length dl1) 1))
+                   (orz 'compose/limited-apply
+                     ("jo should return one data~%")
+                     ("but this jo does not : ~a~%" j))
+                   (data/input-number (car dl1)))])
+           (cond [(>= actual-number input-number)
+                  (put ds dl)
+                  (compose/call {'call n})]
+                 [(< actual-number input-number)
+                  (push ds {'name-curry n dl
+                                        (- input-number actual-number)})]))]))
+    #+end_src
+
+*** compose/ex-bind
+
+    - here use {'ex-bind j vl}
+      instead of {'ex-bind j jj}
+      because {'bind data non-var} can only be generated by cut
+
+    #+begin_src scheme
+    (define (compose/ex-bind j)
+      (match j
+        [{'ex-bind j vl}
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jo j)
+                      (ds/gather-right dp))]
+                [d (car dl)])
+           (if (not (eq? (length dl) 1))
+             (orz 'compose/ex-bind
+               ("jo should return one data~%")
+               ("but this jo does not : ~a~%" j))
+             (for-each (lambda (v)
+                         (bs/extend-level-1 v d)
+                         (push ds {'bind d v}))
+                       vl)))]))
+    #+end_src
+
+*** compose/im-bind
+
+    #+begin_src scheme
+    (define (compose/im-bind j)
+      (match j
+        [{'im-bind j vl}
+         (let* ([dp ds]
+                [dl (let ()
+                      (compose/jo j)
+                      (ds/gather-right dp))]
+                [d (car dl)])
+           (if (not (eq? (length dl) 1))
+             (orz 'compose/im-bind
+               ("jo should return one data~%")
+               ("but this jo does not : ~a~%" j))
+             (for-each (lambda (v)
+                         (bs/extend-level-1 v d))
+                       vl)))]))
+    #+end_src
+
+* >< cut
+
+*** cut
+
+    #+begin_src scheme
+    (define (cut)
+      (match (pop rs)
+        [{c ex end jj}
+         (cond [(>= c (length jj))
+                (end)]
+               [else
+                (let ([j (list-ref jj c)])
+                  (push {(+ 1 c) ex end jj})
+                  (cut/jo (car j))
+                  (rs/next))])]))
+    #+end_src
+
+*** cut/jo
+
+    #+begin_src scheme
+    (define (cut/jo j)
+      (case (car j)
+        ['var           (cut/var j)]
+        ['call          (cut/call j)]
+        ['limited-call  (cut/limited-call j)]
+        ['limited-apply (cut/limited-apply j)]
+        ['arrow         (cut/arrow j)]
+        ['lambda        (cut/lambda j)]
+        ['ex-bind       (cut/ex-bind j)]
+        ['im-bind       (cut/im-bind j)]))
+    #+end_src
+
+*** cut/var
+
+    #+begin_src scheme
+    (define (cut/var j)
+      (let ([d (bs/deep j)])
+        (match j
+          [{'var id} ])))
+    #+end_src
+
+*** cut/call
+
+    #+begin_src scheme
+    (define (cut/call j)
+      (match j
+        [{'call n}
+         (let ([found (assq n ns)])
+           (if (not found)
+             (orz 'cut/call ("unknow name : ~a~%" n))
+             (match (cdr found)
+               [{'meaning-type-cons pt n nl}
+                (let ([len (type/input-number (unique-copy/pre-type pt))])
+                  (push ds {'cons n (fetch ds len)}))]
+               [{'meaning-data-cons pt n n0}
+                (let ([len (type/input-number (unique-copy/pre-type pt))])
+                  (push ds {'cons n (fetch ds len)}))]
+               [{'meaning-jojo pt pjj}
+                (push rs {0 compose rs/next (unique-copy/pre-jojo pjj '())})]
+               [{'meaning-function pt pb}
+                (let ([sjj (compose/try-to-get-succedent
+                            (unique-copy/pre-body pb '()))])
+                  (if sjj
+                    (push rs {0 compose rs/next sjj})
+                    (let* ([t (unique-copy/pre-type pt)]
+                           [b (unique-copy/pre-body pb)]
+                           [dl (fetch ds (type/input-number t))])
+                      (put ds (create-trunk-list t b dl)))))])))]))
+
+    (define (cut/type t)
+      (match t
+        [{'arrow ajj sjj} ]
+        [jj]))
+    #+end_src
+
+*** cut/limited-call
+
+*** cut/limited-apply
+
+*** cut/arrow
+
+*** cut/lambda
+
+*** cut/ex-bind
+
+*** cut/im-bind
+
+* ds
+
+*** ds/gather
+
+    #+begin_src scheme
+    (define (ds/gather dp)
+      (: ds-pointer -> {dl1 dl2})
+      (let* ([dl1 (list-sub ds dp)]
+             [dl2 (fetch ds (length dl1))])
+        (set! ds (drop (+ (length dl1) (length dl1))))
+        (list dl1 dl2)))
+    #+end_src
+
+*** ds/gather-right
+
+    #+begin_src scheme
+    (define (ds/gather-right dp)
+      (: ds-pointer -> dl)
+      (let ([dl (list-sub ds dp)])
+        (set! ds (drop (length dl)))
+        dl))
+    #+end_src
+
+* type-check
+
+*** note
+
+    - jojo
+      #+begin_src scheme :tangle no
+      (push rs {cut jojo})
+      <undo-when-success>
+      #+end_src
+
+    - body [for all arrow]
+      #+begin_src scheme :tangle no
+      (push rs {compose <type-antecedent>})
+      <point>
+      (push rs {compose <antecedent>})
+      <ds/gather>
+      (push gs {bind-unify <gathered>})
+
+      <undo>
+      (push rs {cut <antecedent>})
+      <ds/gather>
+      (push gs {unify <gathered>})
+
+      (push rs {compose <type-succedent>})
+      <point>
+      (push rs {cut <succedent>})
+      <ds/gather>
+      (push gs {cover <gathered>})
+      <undo-when-success>
+      #+end_src
+
+*** type-check
+
+    #+begin_src scheme
+    (define (type-check ))
+    #+end_src

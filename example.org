@@ -1,6 +1,11 @@
 #+PROPERTY: tangle example.scm
 #+title: example code of sequent0
 
+* todo
+
+  - change syntax back to no curry
+    sugar as remark
+
 * natural
 
   #+begin_src scheme

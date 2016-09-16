@@ -3,7 +3,6 @@
 
 * todo
 
-  - add level back to var
   - cover
   - unify
   - compute
@@ -445,9 +444,9 @@
            (let ([found (assq n s)])
              (if found
                (let ([old-id (cdr found)])
-                 {{'var old-id} s})
+                 {{'var old-id 0} s})
                (let ([new-id (id/new n '())])
-                 {{'var new-id}
+                 {{'var new-id 0}
                   (cons (cons n new-id) s)})))]))
       #+end_src
 
@@ -543,14 +542,25 @@
         id))
     #+end_src
 
-*** bs/extend-level-0 & bs/extend-level-1
+*** bs/extend & bs/extend-up
 
     #+begin_src scheme
-    (define (bs/extend-level-0 v d)
+    (define (bs/extend v d)
       (: var data -> !)
       (match v
-        [{'var id}
-         (let ([level 0]
+        [{'var id level}
+         (let ([found/ls (assq id bs)])
+           (if found/ls
+             (set! bs (substitute `(,id . ((,level . ,d) . ,(cdr found/ls)))
+                                  (lambda (pair) (eq? (car pair) id))
+                                  bs))
+             (push bs `(,id . ((,level . ,d))))))]))
+
+    (define (bs/extend-up v d)
+      (: var data -> !)
+      (match v
+        [{'var id level}
+         (let ([level (+ 1 level)]
                [found/ls (assq id bs)])
            (if found/ls
              (set! bs (substitute `(,id . ((,level . ,d) . ,(cdr found/ls)))
@@ -558,17 +568,24 @@
                                   bs))
              (push bs `(,id . ((,level . ,d))))))]))
 
-    (define (bs/extend-level-1 v d)
+    ;; in compose/var & cut/var
+    ;;   extend bs whenever meet a new var
+    ;;   this helps commit
+
+    (define (bs/extend-new v d)
       (: var data -> !)
       (match v
-        [{'var id}
-         (let ([level 1]
-               [found/ls (assq id bs)])
-           (if found/ls
-             (set! bs (substitute `(,id . ((,level . ,d) . ,(cdr found/ls)))
-                                  (lambda (pair) (eq? (car pair) id))
-                                  bs))
-             (push bs `(,id . ((,level . ,d))))))]))
+        [{'var id level}
+         (push bs `(,id . ((,level . ,d))))]))
+
+    ;; (define (bs/extend-new v d)
+    ;;   (: var data -> !)
+    ;;   (match v
+    ;;     [{'var id level}
+    ;;      (let ([found/ls (assq id bs)])
+    ;;        (if found/ls
+    ;;          (void)
+    ;;          (push bs `(,id . ()))))]))
     #+end_src
 
 *** var/fresh?
@@ -589,9 +606,8 @@
     (define (bs/find v)
       (: var -> (or data #f))
       (match v
-        [{'var id}
-         (let* ([level 0]
-                [found/commit (assq level (id->ls id))])
+        [{'var id level}
+         (let* ([found/commit (assq level (id->ls id))])
            (if found/commit
              (cdr found/commit)
              (let* ([found/ls (assq id bs)]
@@ -610,7 +626,7 @@
     (define (bs/walk d)
       (: data -> data)
       (match d
-        [{'var id}
+        [{'var id level}
          (let ([found (bs/find d)])
            (if found
              (bs/walk found)
@@ -642,14 +658,14 @@
           [{'done dl}   {'done (bs/deep-list dl)}])))
     #+end_src
 
-*** bs/find-level-1
+*** bs/find-up
 
     #+begin_src scheme
-    (define (bs/find-level-1 v)
+    (define (bs/find-up v)
       (: var -> (or data #f))
       (match v
-        [{'var id}
-         (let* ([level 1]
+        [{'var id level}
+         (let* ([level (+ 1 level)]
                 [found/commit (assq level (id->ls id))])
            (if found/commit
              (cdr found/commit)
@@ -850,22 +866,14 @@
     (define (compose/jojo jj) (for-each compose/jo jj))
     #+end_src
 
-*** ><><>< compose/var
-
-    - extend bs whenever meet a new var
-      this helps commit
+*** compose/var
 
     #+begin_src scheme
     (define (compose/var j)
+      (if (var/fresh? j)
+        (bs/extend-new v))
       (let ([d (bs/deep j)])
-        (push ds d)
-        ;; (match d
-        ;;   [{'trunk t k i}
-        ;;    ;; try trunk -> redex
-        ;;    (push ds ><><><)]
-        ;;   [__
-        ;;    (push ds d)])
-        ))
+        (push ds d)))
     #+end_src
 
 *** type/input-number & type/output-number
@@ -1017,7 +1025,7 @@
                ("jo should return one data~%")
                ("but this jo does not : ~a~%" j))
              (for-each (lambda (v)
-                         (bs/extend-level-1 v d)
+                         (bs/extend-up v d)
                          (push ds {'bind d v}))
                        vl)))]))
     #+end_src
@@ -1038,7 +1046,7 @@
                ("jo should return one data~%")
                ("but this jo does not : ~a~%" j))
              (for-each (lambda (v)
-                         (bs/extend-level-1 v d))
+                         (bs/extend-up v d))
                        vl)))]))
     #+end_src
 
@@ -1073,21 +1081,19 @@
         ['im-bind       (cut/im-bind j)]))
     #+end_src
 
-*** ><><>< cut/var
+*** cut/var
 
     #+begin_src scheme
-    ;; - extend bs whenever meet a new var
-    ;;   this helps commit
-
     (define (cut/var j)
+      (if (var/fresh? j)
+        (bs/extend-new v))
       (let ([d (bs/deep j)])
-        (let ([found-d (bs/find-level-1 j)])
+        (let ([found-d (bs/find-up j)])
           (if found-d
             (push ds found-d)
             (match j
-              [{'var id}
-               ;; seems need level in var for this cut
-               ])))))
+              [{'var id level}
+               {'var id (+ 1 level)}])))))
     #+end_src
 
 *** cut/call

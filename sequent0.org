@@ -3,7 +3,6 @@
 
 * todo
 
-  - try-trunk
   - compute
   - type-check
 
@@ -751,12 +750,21 @@
 
 * trunk
 
-*** >< try-trunk
+*** try-trunk
 
     #+begin_src scheme
     (define (try-trunk t)
       (: trunk -> (or #f data))
-      )
+      (match t
+        [{'trunk t k i}
+         (match (vector-ref k 0)
+           [{'done dl} (list-ref dl i)]
+           [{'todo b dl}
+            (put ds dl)
+            (compose/function t b)
+            (let ([result (pop ds)])
+              (cond [(equal? result t) #f]
+                    [else result]))])]))
     #+end_src
 
 * cover
@@ -1135,7 +1143,7 @@
       all fail -> form trunk
       #+end_src
 
-*** compose/call
+*** compose/call & compose/function
 
     #+begin_src scheme
     (define (compose/call j)
@@ -1308,7 +1316,7 @@
                {'var id (+ 1 level)}])))))
     #+end_src
 
-*** cut/call
+*** cut/call & cut/type
 
     #+begin_src scheme
     (define (cut/call j)

@@ -468,7 +468,16 @@
 
 (define (try-trunk t)
   (: trunk -> (or #f data))
-  )
+  (match t
+    [{'trunk t k i}
+     (match (vector-ref k 0)
+       [{'done dl} (list-ref dl i)]
+       [{'todo b dl}
+        (put ds dl)
+        (compose/function t b)
+        (let ([result (pop ds)])
+          (cond [(equal? result t) #f]
+                [else result]))])]))
 
 (define (cover)
   (: -> bool)

@@ -104,6 +104,10 @@
 (define (print-define+) (set! print-define-flag #t))
 (define (print-define-) (set! print-define-flag #f))
 
+(define type-check-flag #f)
+(define (type-check+) (set! type-check-flag #t))
+(define (type-check-) (set! type-check-flag #f))
+
 (define-macro (define-jojo . body)
   `(define-jojo1 . ,(flower-barcket/as-im-bind body)))
 
@@ -117,6 +121,12 @@
           (compile-type (head->type head))
           (compile-jojo tail)))
   (push ns (cons name meaning))
+  (if type-check-flag
+    (match meaning
+      [{'meaning-jojo pt pjj}
+       (let ([t (unique-copy/pre-type pt '())]
+             [jj (unique-copy/pre-jojo pjj '())])
+         (type-check/jojo t jj))]))
   (if print-define-flag
     (let ()
       (display "\n")
@@ -140,6 +150,12 @@
           (compile-type (head->type head))
           (compile-body tail)))
   (push ns (cons name meaning))
+  (if type-check-flag
+    (match meaning
+      [{'meaning-function pt pb}
+       (let ([t (unique-copy/pre-type pt '())]
+             [b (unique-copy/pre-body pb '())])
+         (type-check/function t b))]))
   (if print-define-flag
     (let ()
       (display "\n")
@@ -945,4 +961,63 @@
   (compose/jojo
    (unique-copy/pre-jojo (compile/jojo s) '())))
 
-(define (type-check ))
+(define (type-check/jojo t jj)
+  (: type jojo -> bool)
+  (match t
+    [{'arrow tajj tsjj}
+     (let ([ds0 ds]
+           [gs0 gs]
+           [bs0 bs])
+       (push rs {0 compose rs/exit tajj})
+       (rs/next)
+       (push rs {0 cut rs/exit jj})
+       (rs/next)
+       (let ([dl2 (ds/gather-right ds0)])
+         (push rs {0 compose rs/exit tsjj})
+         (rs/next)
+         (let ([dl1 (ds/gather-right ds0)])
+           (push gs {0 unify gs/exit {dl1 dl2}})
+           (cond [(gs/exit)
+                  (set! ds ds0)
+                  (set! gs gs0)
+                  (set! bs bs0)]
+                 [else (orz 'type-check/jojo
+                         ("cover fail~%"))]))))]))
+
+(define (type-check/function t b)
+  (: type body -> bool)
+  (match t
+    [{'arrow tajj tsjj}
+     (for-each (lambda (a) (type-check/arrow t a))
+               b)]
+    [__ (orz 'type-check/function
+          ("type of function must be arrow~%")
+          ("type : ~a~%" t))]))
+
+(define (type-check/arrow ta a)
+  (: type-arrow arrow -> bool)
+  (match {ta a}
+    [{{'arrow tajj tsjj} {'arrow ajj sjj}}
+     (push rs {0 compose rs/exit tajj})
+     (rs/next)
+     (let ([ds0 ds]
+           [gs0 gs]
+           [bs0 bs])
+       (push rs {0 cut rs/exit ajj})
+       (rs/next)
+       (push gs {0 unify gs/exit (ds/gather ds0)})
+       (cond [(gs/next)
+              (push rs {0 compose rs/exit tsjj})
+              (rs/next)
+              (let ([ds1 ds])
+                (push rs {0 cut rs/exit sjj})
+                (rs/next)
+                (push gs {0 cover gs/exit (ds/gather ds1)})
+                (cond [(gs/exit)
+                       (set! ds ds0)
+                       (set! gs gs0)
+                       (set! bs bs0)]
+                      [else (orz 'type-check/arrow
+                              ("cover fail~%"))]))]
+             [else (orz 'type-check/arrow
+                     ("unify fail~%"))]))]))

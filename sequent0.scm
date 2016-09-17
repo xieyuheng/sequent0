@@ -904,11 +904,11 @@
        (push rs {0 compose rs/exit ajj})
        (rs/next)
        (push bs '(commit-point))
-       (push gs {0 cover bs/commit (ds/gather ds0)})
+       (push gs {0 unify bs/commit (ds/gather ds0)})
        (if (gs/next)
          (compose/jojo sjj)
          (orz 'cut/type
-           ("fail on cover~%"))))]))
+           ("fail on unify~%"))))]))
 
 (define (cut/apply j)
   (match (bs/walk (pop ds))

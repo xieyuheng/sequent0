@@ -3,7 +3,6 @@
 
 * todo
 
-  - compute
   - type-check
 
 * note
@@ -260,7 +259,7 @@
     (define-macro (define-jojo . body)
       `(define-jojo1 . ,(flower-barcket/as-im-bind body)))
 
-    (define-macro (define-jojo head . tail)
+    (define-macro (define-jojo1 head . tail)
       `($define-jojo (quote ,head) (quote ,tail)))
 
     (define ($define-jojo head tail)
@@ -1433,17 +1432,20 @@
         dl))
     #+end_src
 
-* >< compute
+* top-level
 
 *** app
 
     #+begin_src scheme
-    (define (app ))
+    (define-macro (app s)
+      `($app (quote ,s)))
+
+    (define ($app s)
+      (compose/jojo
+       (unique-copy/pre-jojo (compile/jojo s) '())))
     #+end_src
 
-* >< type-check
-
-*** note
+*** note type-check
 
     - jojo
       #+begin_src scheme :tangle no
@@ -1472,7 +1474,7 @@
       <undo-when-success>
       #+end_src
 
-*** type-check
+*** >< type-check
 
     #+begin_src scheme
     (define (type-check ))

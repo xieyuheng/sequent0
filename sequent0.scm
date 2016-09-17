@@ -107,7 +107,7 @@
 (define-macro (define-jojo . body)
   `(define-jojo1 . ,(flower-barcket/as-im-bind body)))
 
-(define-macro (define-jojo head . tail)
+(define-macro (define-jojo1 head . tail)
   `($define-jojo (quote ,head) (quote ,tail)))
 
 (define ($define-jojo head tail)
@@ -938,6 +938,11 @@
     (set! ds (drop (length dl)))
     dl))
 
-(define (app ))
+(define-macro (app s)
+  `($app (quote ,s)))
+
+(define ($app s)
+  (compose/jojo
+   (unique-copy/pre-jojo (compile/jojo s) '())))
 
 (define (type-check ))

@@ -355,11 +355,6 @@
 ;;          (void)
 ;;          (push bs `(,id . ()))))]))
 
-(define (var/fresh? v)
-  (: var -> bool)
-  (equal? (bs/walk v)
-          v))
-
 (define (id->ls id)
   (vector-ref id 1))
 
@@ -426,12 +421,31 @@
              (cdr found/bind)
              #f))))]))
 
+(define (var/fresh? v)
+  (: var -> bool)
+  (equal? (bs/walk v)
+          v))
+
+(define (var/eq? v1 v2)
+  (match {v1 v2}
+    [{{'var id1 level1} {'var id2 level2}}
+     (and (eq? id1 id2)
+          (eq? level1 level2))]))
+
+(define (occur-check v d)
+  )
+
 (define (gs/exit) (void))
 
 (define (gs/next)
+  (: -> bool)
   (match (tos gs)
     [{c ex end {dl1 dl2}}
      (ex)]))
+
+(define (try-trunk t)
+  (: trunk -> (or #f data))
+  )
 
 (define (cover)
   (: -> bool)
@@ -454,43 +468,166 @@
   (let ([d1 (bs/walk d1)]
         [d2 (bs/walk d2)])
     (match {d1 d2}
-      ;; level-0 unify
-      [{'bind d v}])))
+      ;; ignore the sub-data
+      ;;   for it is used by top-level type-check
+      [{{'bind d v} __} (cover/data/data d d2)]
+      [{__ {'bind d v}} (cover/data/data d1 d)]
+      ;; var is the hero
+      ;; this should pass occur-check
+      [{{'var id1 level1} {'var id2 level2}}
+       (cond [(var/eq? d1 d2) #t] ;; no self-cover
+             [else (cover/var/data d1 d2)])]
+      [{{'var id level} __} (cover/var/data d1 d2)]
+      [{__ {'var id level}} #f] ;; the only difference from unify/data/data
+      ;; cons push gs
+      [{{'cons n1 dl1} {'cons n2 dl2}}
+       (cond [(eq? n1 n2)
+              (push gs {0 cover gs/exit {dl1 dl2}})
+              (gs/next)]
+             [else #f])]
+      ;; trunk is the tricky part
+      ;;   semantic equal is used
+      [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}} (cover/trunk/trunk d1 d2)]
+      [{{'trunk t k i} __} (cover/trunk/data d1 d2)]
+      [{__ {'trunk t k i}} (cover/data/trunk d1 d2)]
+      ;; others use syntax equal
+      [{__ __} (equal? d1 d2)])))
 
-;; (let ([p (bs/walk bs p)]
-;;       [d (bs/walk bs d)])
-;;   (match {p d}
-;;     [{{'bind {__ p0}} __} (cover/data p0 d e)]
-;;     [{__ {'bind {__ d0}}} (cover/data p d0 e)]
-;;     [{{'var v1} {'var v2}}
-;;      (if (var/eq? v1 v2)
-;;        {'success e}
-;;        (cover/var/data v1 d e))]
-;;     [{{'var v} __} (cover/var/data v d e)]
-;;     [{__ {'var v}}
-;;      ;; here is the only different between unify/data
-;;      {'fail {`(cover/data
-;;                fail because non-var can never cover var
-;;                (pattern: ,p)
-;;                (data: ,d))}}]
-;;     [{{'trunk t1} {'trunk t2}} (cover/trunk t1 t2 e)]
-;;     [{{'trunk t} __} (cover/trunk/data t d e)]
-;;     [{__ {'trunk t}} (cover/trunk/data t p e)]
+;; ;; the equal? of scheme can handle circle
+;; (let ([p1 (cons 1 1)]
+;;       [p2 (cons 1 1)])
+;;   (set-cdr! p1 p1)
+;;   (set-cdr! p2 p2)
+;;   (list p1 p2 (equal? p1 p2)))
+;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
 
-;;     [{{'cons c1} {'cons c2}} (cover/cons c1 c2 e)]
-;;     [{{'arrow a1} {'arrow a2}} (cover/arrow a1 a2 e)]
-;;     [{{'lambda l1} {'lambda l2}} (cover/lambda l1 l2 e)]
-;;     [{__ __}
-;;      {'fail {`(cover/data
-;;                fail to unify
-;;                (pattern: ,p) (data: ,d))}}]))
+(define (cover/var/data v d)
+  (: fresh-var data -> bool)
+  ;; no consistent-check
+  ;;   because we do not have infer
+  (if (occur-check/data v d)
+    (bs/extend v d)
+    #f))
 
-(define (cover/data-list/data-list dl1 dl2)
-  (cond for-each cover/data/data jj))
+(define (cover/trunk/data t d)
+  (let ([result (try-trunk t)])
+    (if result
+      (cover/data/data result d)
+      #f)))
 
+(define (cover/data/trunk d t)
+  (let ([result (try-trunk t)])
+    (if result
+      (cover/data/data d result)
+      #f)))
 
+(define (cover/trunk/trunk t1 t2)
+  (let ([result1 (try-trunk t1)]
+        [result2 (try-trunk t2)])
+    (cond [result1 (cover/data/trunk result1 t2)]
+          [result2 (cover/trunk/data t1 result2)]
+          [else
+           ;; when both fail to try-trunk
+           ;;   still have chance to syntax equal
+           (match {t1 t2}
+             [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}}
+              (match {(vector-ref k1 0) (vector-ref k2 0)}
+                [{{'todo b1 dl1} {'todo b2 dl2}}
+                 (cond [(equal? {t1 i1 b1} {t2 i2 b2})
+                        (push gs {0 cover gs/exit {dl1 dl2}})
+                        (gs/next)]
+                       [else #f])])])])))
 
+(define (unify)
+  (: -> bool)
+  (match (pop gs)
+    [{c ex end {dl1 dl2}}
+     (cond [(>= c (length dl1))
+            (end)
+            #t]
+           [else
+            (let ([d1 (list-ref dl1 c)]
+                  [d2 (list-ref dl2 c)])
+              (push {(+ 1 c) ex end {dl1 dl2}})
+              (if (unify/data/data d1 d2)
+                (gs/next)
+                #f))])]))
 
+(define (unify/data/data d1 d2)
+  (: data data -> bool)
+  ;; var -walk-> fresh-var
+  (let ([d1 (bs/walk d1)]
+        [d2 (bs/walk d2)])
+    (match {d1 d2}
+      ;; ignore the sub-data
+      ;;   for it is used by top-level type-check
+      [{{'bind d v} __} (unify/data/data d d2)]
+      [{__ {'bind d v}} (unify/data/data d1 d)]
+      ;; var is the hero
+      ;; this should pass occur-check
+      [{{'var id1 level1} {'var id2 level2}}
+       (cond [(var/eq? d1 d2) #t] ;; no self-unify
+             [else (unify/var/data d1 d2)])]
+      [{{'var id level} __} (unify/var/data d1 d2)]
+      [{__ {'var id level}} (unify/var/data d2 d1)]
+      ;; cons push gs
+      [{{'cons n1 dl1} {'cons n2 dl2}}
+       (cond [(eq? n1 n2)
+              (push gs {0 unify gs/exit {dl1 dl2}})
+              (gs/next)]
+             [else #f])]
+      ;; trunk is the tricky part
+      ;;   semantic equal is used
+      [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}} (unify/trunk/trunk d1 d2)]
+      [{{'trunk t k i} __} (unify/trunk/data d1 d2)]
+      [{__ {'trunk t k i}} (unify/data/trunk d1 d2)]
+      ;; others use syntax equal
+      [{__ __} (equal? d1 d2)])))
+
+;; ;; the equal? of scheme can handle circle
+;; (let ([p1 (cons 1 1)]
+;;       [p2 (cons 1 1)])
+;;   (set-cdr! p1 p1)
+;;   (set-cdr! p2 p2)
+;;   (list p1 p2 (equal? p1 p2)))
+;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
+
+(define (unify/var/data v d)
+  (: fresh-var data -> bool)
+  ;; no consistent-check
+  ;;   because we do not have infer
+  (if (occur-check/data v d)
+    (bs/extend v d)
+    #f))
+
+(define (unify/trunk/data t d)
+  (let ([result (try-trunk t)])
+    (if result
+      (unify/data/data result d)
+      #f)))
+
+(define (unify/data/trunk d t)
+  (let ([result (try-trunk t)])
+    (if result
+      (unify/data/data d result)
+      #f)))
+
+(define (unify/trunk/trunk t1 t2)
+  (let ([result1 (try-trunk t1)]
+        [result2 (try-trunk t2)])
+    (cond [result1 (unify/data/trunk result1 t2)]
+          [result2 (unify/trunk/data t1 result2)]
+          [else
+           ;; when both fail to try-trunk
+           ;;   still have chance to syntax equal
+           (match {t1 t2}
+             [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}}
+              (match {(vector-ref k1 0) (vector-ref k2 0)}
+                [{{'todo b1 dl1} {'todo b2 dl2}}
+                 (cond [(equal? {t1 i1 b1} {t2 i2 b2})
+                        (push gs {0 unify gs/exit {dl1 dl2}})
+                        (gs/next)]
+                       [else #f])])])])))
 
 (define (rs/exit) (void))
 

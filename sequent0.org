@@ -3,10 +3,9 @@
 
 * todo
 
-  - occur-check
+  - try-trunk
   - compute
   - type-check
-  - try-trunk
 
 * note
 
@@ -688,11 +687,44 @@
               (eq? level1 level2))]))
     #+end_src
 
-*** >< occur-check
+* occur-check
+
+*** occur-check/data
 
     #+begin_src scheme
-    (define (occur-check v d)
-      )
+    (define (occur-check/data v d)
+      (: fresh-var data -> bool)
+      (match (bs/deep d)
+        [{'var id level} (not (var/eq? v d))]
+        [{'cons n dl}    (occur-check/data-list v dl)]
+        [{'bind d sd}    (occur-check/data-list v {d sd})]
+        [{'trunk t k i}  (occur-check/trunk v d)]
+        [__              #t]))
+    #+end_src
+
+*** occur-check/data-list
+
+    #+begin_src scheme
+    (define (occur-check/data-list v dl)
+      (: fresh-var {data ...} -> bool)
+      (match dl
+        [{} #t]
+        [(d . r)
+         (if (occur-check/data v d)
+           (occur-check/data-list v r)
+           #f)]))
+    #+end_src
+
+*** occur-check/trunk
+
+    #+begin_src scheme
+    (define (occur-check/trunk v t)
+      (: fresh-var trunk -> bool)
+      (match t
+        [{'trunk t k i}
+         (match (vector-ref k 0)
+           [{'todo b dl} (occur-check/data-list dl)]
+           [{'done dl}   (occur-check/data-list dl)])]))
     #+end_src
 
 * gs
@@ -1393,9 +1425,15 @@
         dl))
     #+end_src
 
-* ><><>< compute
+* >< compute
 
-* ><><>< type-check
+*** app
+
+    #+begin_src scheme
+    (define (app ))
+    #+end_src
+
+* >< type-check
 
 *** note
 

@@ -432,8 +432,31 @@
      (and (eq? id1 id2)
           (eq? level1 level2))]))
 
-(define (occur-check v d)
-  )
+(define (occur-check/data v d)
+  (: fresh-var data -> bool)
+  (match (bs/deep d)
+    [{'var id level} (not (var/eq? v d))]
+    [{'cons n dl}    (occur-check/data-list v dl)]
+    [{'bind d sd}    (occur-check/data-list v {d sd})]
+    [{'trunk t k i}  (occur-check/trunk v d)]
+    [__              #t]))
+
+(define (occur-check/data-list v dl)
+  (: fresh-var {data ...} -> bool)
+  (match dl
+    [{} #t]
+    [(d . r)
+     (if (occur-check/data v d)
+       (occur-check/data-list v r)
+       #f)]))
+
+(define (occur-check/trunk v t)
+  (: fresh-var trunk -> bool)
+  (match t
+    [{'trunk t k i}
+     (match (vector-ref k 0)
+       [{'todo b dl} (occur-check/data-list dl)]
+       [{'done dl}   (occur-check/data-list dl)])]))
 
 (define (gs/exit) (void))
 
@@ -905,5 +928,7 @@
   (let ([dl (list-sub ds dp)])
     (set! ds (drop (length dl)))
     dl))
+
+(define (app ))
 
 (define (type-check ))

@@ -40,13 +40,109 @@
         factorial))
   #+end_src
 
-* add/commute by richly-defined add
+* stack processing
 
   #+begin_src scheme
   (define-type (natural : type)
     (zero : natural)
     (succ : (natural -> natural)))
 
+  (define-function (drop : (:t ->))
+    (:d ->))
+
+  (define-function (dup : (:t -> :t :t))
+    (:d -> :d :d))
+
+  (define-function (over : (:t1 :t2 -> :t1 :t2 :t1))
+    (:d1 :d2 -> :d1 :d2 :d1))
+
+  (define-function (tuck : (:t1 :t2 -> :t2 :t1 :t2))
+    (:d1 :d2 -> :d2 :d1 :d2))
+
+  (define-function (swap : (:t1 :t2 -> :t2 :t1))
+    (:d1 :d2 -> :d2 :d1))
+
+  (app (-> zero
+           zero succ
+           swap
+           drop
+           dup))
+  #+end_src
+
+* list
+
+  #+begin_src scheme
+  (define-type (list : (type -> type))
+    (null : (-> :t list))
+    (cons : (:t list :t -> :t list)))
+
+  (define-function (append : (:t list :t list -> :t list))
+    (:l null -> :l)
+    (:l :r :e cons -> :l :r append :e cons))
+
+  (define-function (length : (:t list -> natural))
+    (null -> zero)
+    (:l :e cons -> :l length succ))
+
+  (app (->
+        null
+        zero cons
+        null
+        zero cons
+        append))
+
+  (app (->
+        null
+        zero cons
+        zero cons
+        null
+        zero cons
+        zero cons
+        append
+        length))
+  #+end_src
+
+* list map
+
+  #+begin_src scheme
+  (define-function (map : (:t1 list (:t1 -> :t2) -> :t2 list))
+    (null :f -> null)
+    (:l :e cons :f -> :l :f map :e :f @ cons))
+
+  (app (->
+        null
+        zero cons
+        zero cons
+        zero cons
+        null
+        zero cons
+        zero cons
+        zero cons
+        append
+        (zero -> zero succ)
+        map))
+
+  (app (->
+        null
+        zero cons
+        zero cons
+        (lambda (natural -> natural)
+          (zero -> zero succ))
+        map))
+
+  (define-type (has-length : (:t list natural -> type))
+    (null/has-length : (-> null zero has-length))
+    (cons/has-length : (:l :n has-length -> :l :a cons :n succ has-length)))
+
+  (define-function
+      (map/has-length : (:l :n has-length -> :l :f map :n has-length))
+    (null/has-length -> null/has-length)
+    (:h cons/has-length -> :h map/has-length cons/has-length))
+  #+end_src
+
+* add/commute by richly-defined add
+
+  #+begin_src scheme
   (define-function (add : (natural natural -> natural))
     (:m zero -> :m)
     (:m :n succ -> :m :n add succ))
@@ -98,138 +194,6 @@
   ><><><
   ;; :m :n succ add
   ;; :n succ :m add eq
-  #+end_src
-
-* stack processing
-
-  #+begin_src scheme
-  (define-type (natural : type)
-    (zero : natural)
-    (succ : (natural -> natural)))
-
-  (define-function (drop : (:t ->))
-    (:d ->))
-
-  (define-function (dup : (:t -> :t :t))
-    (:d -> :d :d))
-
-  (define-function (over : (:t1 :t2 -> :t1 :t2 :t1))
-    (:d1 :d2 -> :d1 :d2 :d1))
-
-  (define-function (tuck : (:t1 :t2 -> :t2 :t1 :t2))
-    (:d1 :d2 -> :d2 :d1 :d2))
-
-  (define-function (swap : (:t1 :t2 -> :t2 :t1))
-    (:d1 :d2 -> :d2 :d1))
-
-  (app (-> zero
-           zero succ
-           swap
-           drop
-           dup))
-  #+end_src
-
-* list
-
-  #+begin_src scheme
-  (define-type (natural : type)
-    (zero : natural)
-    (succ : (natural -> natural)))
-
-  (define-function (add : (natural natural -> natural))
-    (:m zero -> :m)
-    (:m :n succ -> :m :n add succ))
-
-  (define-function (mul : (natural natural -> natural))
-    (:m zero -> zero)
-    (:m :n succ -> :m :n mul :m add))
-
-  (define-type (list : (type -> type))
-    (null : (-> :t list))
-    (cons : (:t list :t -> :t list)))
-
-  (define-function (append : (:t list :t list -> :t list))
-    (:l null -> :l)
-    (:l :r :e cons -> :l :r append :e cons))
-
-  (define-function (length : (:t list -> natural))
-    (null -> zero)
-    (:l :e cons -> :l length succ))
-
-  (app (->
-        null
-        zero cons
-        null
-        zero cons
-        append))
-
-  (app (->
-        null
-        zero cons
-        zero cons
-        null
-        zero cons
-        zero cons
-        append
-        length))
-  #+end_src
-
-* list map
-
-  #+begin_src scheme
-  (define-type (natural : type)
-    (zero : natural)
-    (succ : (natural -> natural)))
-
-  (define-function (add : (natural natural -> natural))
-    (:m zero -> :m)
-    (:m :n succ -> :m :n add succ))
-
-  (define-function (mul : (natural natural -> natural))
-    (:m zero -> zero)
-    (:m :n succ -> :m :n mul :m add))
-
-  (define-type (list : (type -> type))
-    (null : (-> :t list))
-    (cons : (:t list :t -> :t list)))
-
-  (define-function (append : (:t list :t list -> :t list))
-    (:l null -> :l)
-    (:l :r :e cons -> :l :r append :e cons))
-
-  (define-function (map : (:t1 list (:t1 -> :t2) -> :t2 list))
-    (null :f -> null)
-    (:l :e cons :f -> :l :f map :e :f apply cons))
-
-  (app (->
-        null
-        zero cons
-        zero cons
-        zero cons
-        null
-        zero cons
-        zero cons
-        zero cons
-        append
-        (zero -> zero succ)
-        map))
-
-  (app (->
-        null
-        zero cons
-        zero cons
-        (lambda (natural -> natural)
-          (zero -> zero succ))
-        map))
-
-  (define-type (has-length : (:t list natural -> type))
-    (null/has-length : (-> null zero has-length))
-    (cons/has-length : (:l :n has-length -> :l :a cons :n succ has-length)))
-
-  (define-function
-      (map/has-length : (:l :n has-length -> :l :f map :n has-length))
-    (null/has-length -> null/has-length)
-    (:h cons/has-length -> :h map/has-length cons/has-length))
   #+end_src
 
 * vector

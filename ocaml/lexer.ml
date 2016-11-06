@@ -1,5 +1,5 @@
-let example_in_channel = open_in "example.scm" ;;
-let example_cs = Stream.of_channel example_in_channel ;;
+let example_in_channel = open_in "example.scm"
+let example_cs = Stream.of_channel example_in_channel
 
 type lex =
   | ROUND_BRA
@@ -9,7 +9,6 @@ type lex =
   | FLOWER_BRA
   | FLOWER_KET
   | WORD of bytes
-;;
 
 let rec bytes_of_char_list__help str i cl =
   match cl with
@@ -17,16 +16,12 @@ let rec bytes_of_char_list__help str i cl =
   | c :: r
     -> (Bytes.set str i c);
        bytes_of_char_list__help str (i + 1) r
-;;
-(bytes_of_char_list__help : bytes -> int -> char list -> bytes) ;;
 
 let bytes_of_char_list cl =
   (bytes_of_char_list__help
     (Bytes.make (List.length cl) ' ')
     0
     cl)
-;;
-(bytes_of_char_list : char list -> bytes) ;;
 
 let rec lexer_word cl cs =
   match Stream.peek cs with
@@ -38,8 +33,6 @@ let rec lexer_word cl cs =
     -> bytes_of_char_list (List.rev cl), cs
   | Some c
     -> Stream.junk cs; (lexer_word (c :: cl) cs)
-;;
-(lexer_word : char list -> char Stream.t -> (bytes * char Stream.t)) ;;
 
 let rec lexer cs =
   match Stream.peek cs with
@@ -56,7 +49,22 @@ let rec lexer cs =
     -> Stream.junk cs;
        match (lexer_word [c] cs) with
        | bs, cs1 -> (WORD bs) :: (lexer cs1)
-;;
-(lexer : char Stream.t -> lex list) ;;
 
-lexer example_cs ;;
+let print_lex x =
+  match x with
+  | ROUND_BRA  -> print_string "( "
+  | ROUND_KET  -> print_string ") "
+  | SQUARE_BRA -> print_string "[ "
+  | SQUARE_KET -> print_string "] "
+  | FLOWER_BRA -> print_string "{ "
+  | FLOWER_KET -> print_string "} "
+  | WORD bs    -> print_string bs; print_string " "
+
+let rec print_lex_list lx =
+  match lx with
+  | [] -> print_string "\n";
+  | x :: r ->
+    print_lex x;
+    print_lex_list r;
+
+;; (print_lex_list (lexer example_cs))

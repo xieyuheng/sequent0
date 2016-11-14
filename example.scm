@@ -44,23 +44,28 @@
 
 (define drop
   (lambda (-> :t [])
-    (-> :d [])))
+    (-> :d
+        [])))
 
 (define dup
   (lambda (-> :t [:t :t])
-    (-> :d [:d :d])))
+    (-> :d
+        [:d :d])))
 
 (define over
   (lambda (-> [:t1 :t2] [:t1 :t2 :t1])
-    (-> [:d1 :d2] [:d1 :d2 :d1])))
+    (-> [:d1 :d2]
+        [:d1 :d2 :d1])))
 
 (define tuck
   (lambda (-> [:t1 :t2] [:t2 :t1 :t2])
-    (-> [:d1 :d2] [:d2 :d1 :d2])))
+    (-> [:d1 :d2]
+        [:d2 :d1 :d2])))
 
 (define swap
   (lambda (-> [:t1 :t2] [:t2 :t1])
-    (-> [:d1 :d2] [:d2 :d1])))
+    (-> [:d1 :d2]
+        [:d2 :d1])))
 
 (run zero
      zero succ

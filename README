@@ -1,7 +1,2 @@
-a prototype functional language
-
-prepared for scheme and functional programming workshop 2016 ::
-http://scheme2016.snow-fort.org
-
-please visit the project page to find more ::
-http://xieyuheng.github.io/sequent1
+a prototype dependent type functional language
+implemented by a simple interpreter in ocaml

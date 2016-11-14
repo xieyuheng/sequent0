@@ -8,12 +8,13 @@
 type name = bytes
 
 type arrow = jo list * jo list
+and lambda = typ * arrow list
 and level = int
 and data =
   | DATA_VAR      of id * level
   | DATA_CONS     of name * data list
   | DATA_ARROW    of arrow
-  | DATA_LAMBDA   of typ * arrow list
+  | DATA_LAMBDA   of lambda
   | DATA_BIND     of data * data
   | DATA_TRUNK    of typ * trunky ref * int
 and id = (name * int * ls) ref
@@ -22,28 +23,29 @@ and trunky =
   | TRUNKY_TODO   of arrow list * data list
   | TRUNKY_DONE   of data list
 and typ =
-  | TYP_ARROW     of jo list * jo list
+  | TYP_ARROW     of arrow
   | TYP_JOJO      of jo list
 and jo =
   | JO_VAR        of id * int
   | JO_CALL       of name
-  | JO_ARROW      of jo list * jo list
-  | JO_LAMBDA     of typ * arrow list
+  | JO_ARROW      of arrow
+  | JO_LAMBDA     of lambda
   | JO_APPLY
   | JO_EX_BIND    of jo * jo list
   | JO_IM_BIND    of jo * jo list
 
 type pre_arrow = pre_jo list * pre_jo list
+and pre_lambda = pre_typ * pre_arrow list
 and pre_jo =
   | PRE_VAR       of name
   | PRE_CALL      of name
-  | PRE_ARROW     of pre_jo list * pre_jo list
-  | PRE_LAMBDA    of pre_typ * pre_arrow list
+  | PRE_ARROW     of pre_arrow
+  | PRE_LAMBDA    of pre_lambda
   | PRE_APPLY
   | PRE_EX_BIND   of pre_jo * pre_jo list
   | PRE_IM_BIND   of pre_jo * pre_jo list
 and pre_typ =
-  | PRE_TYP_ARROW of pre_jo list * pre_jo list
+  | PRE_TYP_ARROW of pre_arrow
   | PRE_TYP_JOJO  of pre_jo list
 
 type meaning =

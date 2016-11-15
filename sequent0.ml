@@ -76,27 +76,27 @@ let gs : gsp stack = ref []
 let push s v =
   s := v :: !s;
 
-(* val put : 'a stack -> 'a list -> unit *)
-let put s l =
-  s := l @ !s;
-
-(* val pop : 'a stack -> 'a *)
-let pop s =
-  match !s with
-  | [] -> ><><><
-  | h :: r ->
-    s := r;
-    h
-
-(* val tos : 'a stack -> 'a *)
-let tos s =
-  match !s with
-  | [] -> ><><><
-  | h :: r ->
-    h
-
-(* val fetch : 'a stack -> int -> 'a list *)
-let fetch s n =
-  match !s with
-  | [] -> ><><><
-  | h :: r -> ><><><
+(* (\* val put : 'a stack -> 'a list -> unit *\)
+ * let put s l =
+ *   s := l @ !s;
+ *
+ * (\* val pop : 'a stack -> 'a *\)
+ * let pop s =
+ *   match !s with
+ *   | [] -> ><><><
+ *   | h :: r ->
+ *     s := r;
+ *     h
+ *
+ * (\* val tos : 'a stack -> 'a *\)
+ * let tos s =
+ *   match !s with
+ *   | [] -> ><><><
+ *   | h :: r ->
+ *     h
+ *
+ * (\* val fetch : 'a stack -> int -> 'a list *\)
+ * let fetch s n =
+ *   match !s with
+ *   | [] -> ><><><
+ *   | h :: r -> ><><>< *)

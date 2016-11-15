@@ -1,6 +1,3 @@
-let example_in_channel = open_in "example.scm"
-let example_cs = Stream.of_channel example_in_channel
-
 type lex =
   | ROUND_BRA
   | ROUND_KET
@@ -60,11 +57,9 @@ let print_lex x =
   | FLOWER_KET -> print_string "} "
   | WORD bs    -> print_string bs; print_string " "
 
-let rec print_lex_list lx =
-  match lx with
-  | [] -> print_string "\n";
+let rec print_lex_list xl =
+  match xl with
+  | [] -> ()
   | x :: r ->
     print_lex x;
     print_lex_list r;
-
-;; (print_lex_list (lexer example_cs))

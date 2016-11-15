@@ -1,3 +1,8 @@
+(* dep :: lexer
+   ocamlc -c parser.mli
+   ocamlc -c parser.ml
+*)
+
 type sexp =
   | ROUND  of sexp list
   | SQUARE of sexp list

@@ -1,7 +1,4 @@
-(* indep
-   ocamlc -c lexer.mli
-   ocamlc -c lexer.ml
- *)
+(* indep *)
 
 type lex =
   | ROUND_BRA

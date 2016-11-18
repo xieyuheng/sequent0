@@ -1,7 +1,4 @@
-(* dep :: lexer
-   ocamlc -c parser.mli
-   ocamlc -c parser.ml
-*)
+(* dep :: lexer *)
 
 type sexp =
   | ROUND  of sexp list

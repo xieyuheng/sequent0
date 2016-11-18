@@ -1,9 +1,3 @@
-(* dispatching
-   | jo      | data    | double data |
-   |---------+---------+-------------|
-   | compose | bs/deep | cover       |
-   | cut     |         | unify       |
- *)
 
 type name = bytes
 
@@ -34,69 +28,18 @@ and jo =
   | JO_EX_BIND    of jo * jo list
   | JO_IM_BIND    of jo * jo list
 
-type pre_arrow = pre_jo list * pre_jo list
-and pre_lambda = pre_typ * pre_arrow list
-and pre_jo =
-  | PRE_VAR       of name
-  | PRE_CALL      of name
-  | PRE_ARROW     of pre_arrow
-  | PRE_LAMBDA    of pre_lambda
-  | PRE_APPLY
-  | PRE_EX_BIND   of pre_jo * pre_jo list
-  | PRE_IM_BIND   of pre_jo * pre_jo list
-and pre_typ =
-  | PRE_TYP_ARROW of pre_arrow
-  | PRE_TYP_JOJO  of pre_jo list
-
-type meaning =
-  | MEANING_TYP_CONS  of pre_typ * name * name list
-  | MEANING_DATA_CONS of pre_typ * name * name
-  | MEANING_JOJO      of pre_typ * pre_jo list
-  | MEANING_FUNCTION  of pre_typ * pre_arrow list
-
-type nsp = name * meaning
 type dsp = data
+let ds : dsp stack = ref []
+
 type bsp = id * ls
+let bs : bsp stack = ref []
 
 type counter = int
 type explainer = unit -> unit
 type ender = unit -> unit
+
 type rsp = counter * explainer * ender * jo list
-type gsp = counter * explainer * ender * ((data list) * (data list))
-
-type 'a stack = 'a list ref
-
-let ns : nsp stack = ref []
-let ds : dsp stack = ref []
-let bs : bsp stack = ref []
 let rs : rsp stack = ref []
+
+type gsp = counter * explainer * ender * ((data list) * (data list))
 let gs : gsp stack = ref []
-
-(* val push : 'a stack -> 'a -> unit *)
-let push s v =
-  s := v :: !s;
-
-(* (\* val put : 'a stack -> 'a list -> unit *\)
- * let put s l =
- *   s := l @ !s;
- *
- * (\* val pop : 'a stack -> 'a *\)
- * let pop s =
- *   match !s with
- *   | [] -> ><><><
- *   | h :: r ->
- *     s := r;
- *     h
- *
- * (\* val tos : 'a stack -> 'a *\)
- * let tos s =
- *   match !s with
- *   | [] -> ><><><
- *   | h :: r ->
- *     h
- *
- * (\* val fetch : 'a stack -> int -> 'a list *\)
- * let fetch s n =
- *   match !s with
- *   | [] -> ><><><
- *   | h :: r -> ><><>< *)

@@ -16,8 +16,8 @@
        ,v)))
 (define-macro (fetch s n)
   (let ([v (gensym "fetch/v")])
-    `(let ([,v (take ,s n)])
-       (set! ,s (drop ,s n))
+    `(let ([,v (take ,s ,n)])
+       (set! ,s (drop ,s ,n))
        ,v)))
 
 (define (head->name head)
@@ -231,9 +231,9 @@
            {(cons j jj) s2}])])]))
 
 (define (unique-copy/pre-type pt s)
-  (case (car pt)
-    ['pre-arrow (unique-copy/pre-arrow pt s)]
-    [else (unique-copy/pre-jojo pt s)]))
+  (match pt
+    [{'pre-arrow __ __} (unique-copy/pre-arrow pt s)]
+    [{'pre-jojo pjj} (unique-copy/pre-jojo pjj s)]))
 
 (define (unique-copy/pre-body pb s)
   (match pb
@@ -356,6 +356,8 @@
 ;;   extend bs whenever meet a new var
 ;;   this helps commit
 
+;; not using ><><><
+
 (define (bs/extend-new v d)
   (: var data -> !)
   (match v
@@ -398,7 +400,7 @@
        (if found
          (bs/walk found)
          d))]
-    [{__ e} d]))
+    [__ d]))
 
 (define (bs/deep d)
   (: data -> data)
@@ -692,7 +694,7 @@
            [else
             (let ([j (list-ref jj c)])
               (push rs {(+ 1 c) ex end jj})
-              (compose/jo (car j))
+              (compose/jo j)
               (rs/next))])]))
 
 (define (compose/jo j)
@@ -707,36 +709,27 @@
 (define (compose/jojo jj) (for-each compose/jo jj))
 
 (define (compose/var j)
-  (if (var/fresh? j)
-    (bs/extend-new j))
+  ;; (if (var/fresh? j)
+  ;;   (bs/extend-new j))
   (let ([d (bs/deep j)])
     (push ds d)))
 
 (define (type/input-number t)
   (match t
     [{'arrow ajj sjj}
-     (let* ([dp ds]
-            [dl (let ()
-                  (compose/jojo ajj)
-                  (ds/gather-right dp))])
-       (length dl))]
+     (length (call-with-output-to-new-ds
+              (lambda () (compose/jojo ajj))))]
     [jj
      0]))
 
 (define (type/output-number t)
   (match t
     [{'arrow ajj sjj}
-     (let* ([dp ds]
-            [dl (let ()
-                  (compose/jojo sjj)
-                  (ds/gather-right dp))])
-       (length dl))]
+     (length (call-with-output-to-new-ds
+              (lambda () (compose/jojo sjj))))]
     [jj
-     (let* ([dp ds]
-            [dl (let ()
-                  (compose/jojo jj)
-                  (ds/gather-right dp))])
-       (length dl))]))
+     (length (call-with-output-to-new-ds
+              (lambda () (compose/jojo jj))))]))
 
 (define (compose/call j)
   (match j
@@ -769,24 +762,28 @@
 
 (define (compose/try-body b)
   (: body -> (or #f sjj))
-  ;; return #f on fail with undo
+  ;; return #f on fail
+  ;; return sjj on success with commit
   (match b
     [{} #f]
     [({'arrow ajj sjj} . r)
-     (let ([ds0 ds]
-           [gs0 gs]
-           [bs0 bs])
-       (push rs {0 compose rs/exit ajj})
-       (rs/next)
-       (push bs '(commit-point))
-       (push gs {0 cover bs/commit (ds/gather ds0)})
-       (if (gs/next)
-         sjj
-         (begin
-           (set! ds ds0)
-           (set! gs gs0)
-           (set! bs bs0)
-           (compose/try-body r))))]))
+     (let* ([ds0 ds]
+            [bs0 bs]
+            [gs0 gs])
+       (let* ([dl1 (call-with-output-to-new-ds
+                    (lambda ()
+                      (push rs {0 compose rs/exit ajj})
+                      (rs/next)))]
+              [dl2 (fetch ds (length dl1))])
+         (push bs '(commit-point))
+         (push gs {0 cover bs/commit {dl1 dl2}})
+         (if (gs/next)
+           sjj
+           (let ()
+             (set! ds ds0)
+             (set! bs bs0)
+             (set! gs gs0)
+             (compose/try-body r)))))]))
 
 (define (create-trunk-list t b dl)
   (let ([k (vector {'todo b dl})])
@@ -794,12 +791,7 @@
      (map (lambda (i) {'trunk t k i})
        (genlist
         (type/output-number
-         (car (unique-copy/pre-type pt))))))))
-
-(define (gather-jojo jj)
-  (let ([dp ds])
-    (compose/jojo jj)
-    (ds/gather-right dp)))
+         (car (unique-copy/pre-type pt '()))))))))
 
 (define (compose/apply j)
   (match (bs/walk (pop ds))
@@ -811,10 +803,9 @@
 (define (compose/ex-bind j)
   (match j
     [{'ex-bind j vl}
-     (let* ([dp ds]
-            [dl (let ()
-                  (compose/jo j)
-                  (ds/gather-right dp))]
+     (let* ([dl (call-with-output-to-new-ds
+                 (lambda ()
+                   (compose/jo j)))]
             [d (car dl)])
        (if (not (eq? (length dl) 1))
          (orz 'compose/ex-bind
@@ -828,10 +819,9 @@
 (define (compose/im-bind j)
   (match j
     [{'im-bind j vl}
-     (let* ([dp ds]
-            [dl (let ()
-                  (compose/jo j)
-                  (ds/gather-right dp))]
+     (let* ([dl (call-with-output-to-new-ds
+                 (lambda ()
+                   (compose/jo j)))]
             [d (car dl)])
        (if (not (eq? (length dl) 1))
          (orz 'compose/im-bind
@@ -849,7 +839,7 @@
            [else
             (let ([j (list-ref jj c)])
               (push rs {(+ 1 c) ex end jj})
-              (cut/jo (car j))
+              (cut/jo j)
               (rs/next))])]))
 
 (define (cut/jo j)
@@ -863,15 +853,15 @@
     ['im-bind       (cut/im-bind j)]))
 
 (define (cut/var j)
-  (if (var/fresh? j)
-    (bs/extend-new j))
+  ;; (if (var/fresh? j)
+  ;;   (bs/extend-new j))
   (let ([d (bs/deep j)])
     (let ([found-d (bs/find-up j)])
       (if found-d
         (push ds found-d)
         (match j
           [{'var id level}
-           {'var id (+ 1 level)}])))))
+           (push ds {'var id (+ 1 level)})])))))
 
 (define (cut/call j)
   (match j
@@ -881,13 +871,13 @@
          (orz 'cut/call ("unknow name : ~a~%" n))
          (match (cdr found)
            [{'meaning-type-cons pt n nl}
-            (cut/type (car (unique-copy/pre-type pt)))]
+            (cut/type (car (unique-copy/pre-type pt '())))]
            [{'meaning-data-cons pt n n0}
-            (cut/type (car (unique-copy/pre-type pt)))]
+            (cut/type (car (unique-copy/pre-type pt '())))]
            [{'meaning-jojo pt pjj}
-            (cut/type (car (unique-copy/pre-type pt)))]
+            (cut/type (car (unique-copy/pre-type pt '())))]
            [{'meaning-function pt pb}
-            (cut/type (car (unique-copy/pre-type pt)))])))]))
+            (cut/type (car (unique-copy/pre-type pt '())))])))]))
 
 (define (cut/type t)
   (match t
@@ -900,11 +890,13 @@
   (: arrow -> !)
   (match a
     [{'arrow ajj sjj}
-     (let ([ds0 ds])
-       (push rs {0 compose rs/exit ajj})
-       (rs/next)
+     (let* ([dl1 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs {0 compose rs/exit ajj})
+                    (rs/next)))]
+            [dl2 (fetch ds (length dl1))])
        (push bs '(commit-point))
-       (push gs {0 unify bs/commit (ds/gather ds0)})
+       (push gs {0 unify bs/commit {dl1 dl2}})
        (if (gs/next)
          (compose/jojo sjj)
          (orz 'cut/type
@@ -941,18 +933,14 @@
     ("can not handle im-bind as jo that is not in type~%")
     ("jo : ~a~%" j)))
 
-(define (ds/gather dp)
-  (: ds-pointer -> {dl1 dl2})
-  (let* ([dl1 (list-sub ds dp)]
-         [dl2 (fetch ds (length dl1))])
-    (set! ds (drop (+ (length dl1) (length dl1))))
-    (list dl1 dl2)))
-
-(define (ds/gather-right dp)
-  (: ds-pointer -> dl)
-  (let ([dl (list-sub ds dp)])
-    (set! ds (drop (length dl)))
-    dl))
+(define (call-with-output-to-new-ds f)
+  (: function -> new-ds)
+  (let ([ds-backup ds])
+    (set! ds '())
+    (f)
+    (let ([new-ds ds])
+      (set! ds ds-backup)
+      new-ds)))
 
 (define-macro (app s)
   `($app (quote ,s)))
@@ -965,24 +953,21 @@
   (: type jojo -> bool)
   (match t
     [{'arrow tajj tsjj}
-     (let ([ds0 ds]
-           [gs0 gs]
-           [bs0 bs])
-       (push rs {0 compose rs/exit tajj})
-       (rs/next)
-       (push rs {0 cut rs/exit jj})
-       (rs/next)
-       (let ([dl2 (ds/gather-right ds0)])
-         (push rs {0 compose rs/exit tsjj})
-         (rs/next)
-         (let ([dl1 (ds/gather-right ds0)])
-           (push gs {0 unify gs/exit {dl1 dl2}})
-           (cond [(gs/exit)
-                  (set! ds ds0)
-                  (set! gs gs0)
-                  (set! bs bs0)]
-                 [else (orz 'type-check/jojo
-                         ("cover fail~%"))]))))]))
+     (let* ([dl1 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs {0 compose rs/exit tajj})
+                    (rs/next)
+                    (push rs {0 cut rs/exit jj})
+                    (rs/next)))]
+            [dl2 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs {0 compose rs/exit tsjj})
+                    (rs/next)))])
+       (push gs {0 unify gs/exit {dl1 dl2}})
+       (cond [(gs/exit)
+              #t]
+             [else (orz 'type-check/jojo
+                     ("cover fail~%"))]))]))
 
 (define (type-check/function t b)
   (: type body -> bool)
@@ -998,25 +983,27 @@
   (: type-arrow arrow -> bool)
   (match {ta a}
     [{{'arrow tajj tsjj} {'arrow ajj sjj}}
-     (push rs {0 compose rs/exit tajj})
-     (rs/next)
-     (let ([ds0 ds]
-           [gs0 gs]
-           [bs0 bs])
-       (push rs {0 cut rs/exit ajj})
-       (rs/next)
-       (push gs {0 unify gs/exit (ds/gather ds0)})
+     (let* ([dl1 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs {0 compose rs/exit tajj})
+                    (rs/next)))]
+            [dl2 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs {0 cut rs/exit ajj})
+                    (rs/next)))])
+       (push gs {0 unify gs/exit {dl1 dl2}})
        (cond [(gs/next)
-              (push rs {0 compose rs/exit tsjj})
-              (rs/next)
-              (let ([ds1 ds])
-                (push rs {0 cut rs/exit sjj})
-                (rs/next)
-                (push gs {0 cover gs/exit (ds/gather ds1)})
+              (let* ([dl3 (call-with-output-to-new-ds
+                           (lambda ()
+                             (push rs {0 compose rs/exit tsjj})
+                             (rs/next)))]
+                     [dl4 (call-with-output-to-new-ds
+                           (lambda ()
+                             (push rs {0 cut rs/exit sjj})
+                             (rs/next)))])
+                (push gs {0 cover gs/exit {dl3 dl4}})
                 (cond [(gs/exit)
-                       (set! ds ds0)
-                       (set! gs gs0)
-                       (set! bs bs0)]
+                       #t]
                       [else (orz 'type-check/arrow
                               ("cover fail~%"))]))]
              [else (orz 'type-check/arrow

@@ -1,2 +1,2 @@
 a prototype dependent type functional language
-implemented by a simple interpreter in ocaml
+implemented by a simple interpreter in scheme

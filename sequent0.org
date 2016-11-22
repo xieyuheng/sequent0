@@ -5,6 +5,14 @@
 
   - test
 
+  - 作爲 jo 的 var
+    和 data 的 var 可以不一樣
+    jo 的 var 中增加一層查找 找到 uni-id 的 作爲 data 的 var
+    這樣就能避免 unique-copy 這個運行時的操作
+    同時避免 pre-jo 這個中間數據結構
+    直接把源代碼編譯到 jo
+    這樣編譯語義本身也就明確了
+
 * note
 
 *** terminology

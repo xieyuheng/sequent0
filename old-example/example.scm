@@ -1,5 +1,5 @@
-(define-type (natural : type)
-  (zero : natural)
+(define-type (natural : (-> type))
+  (zero : (-> natural))
   (succ : (natural -> natural)))
 
 (define-function (add : (natural natural -> natural))

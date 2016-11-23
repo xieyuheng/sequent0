@@ -49,21 +49,21 @@
     (and (list? v) (pair? v)
          (equal? (car v) (vector 'flower-barcket/as-im-bind))
          (member ': v)))
-  (cond [(var? jo)                (list 'pre-var jo)]
-        [(call? jo)               (list 'pre-call jo)]
-        [(apply? jo)              (list 'pre-apply)]
+  (cond [(var? jo)                (list 'var jo)]
+        [(call? jo)               (list 'call jo)]
+        [(apply? jo)              (list 'apply)]
         [(arrow? jo)              (compile-arrow jo)]
         [(lambda? jo)             (compile-lambda jo)]
         [(ex-bind? jo)            (compile-ex-bind jo)]
         [(im-bind? jo)            (compile-im-bind (cdr jo))]))
 
 (define (compile-ex-bind jo)
-  (list 'pre-ex-bind
+  (list 'ex-bind
         (compile-jo (car (right-of ': jo)))
         (compile-jojo (left-of ': jo))))
 
 (define (compile-im-bind jo)
-  (list 'pre-im-bind
+  (list 'im-bind
         (compile-jo (car (right-of ': jo)))
         (compile-jojo (left-of ': jo))))
 
@@ -71,7 +71,7 @@
   (map compile-jo jojo))
 
 (define (compile-arrow arrow)
-  (list 'pre-arrow
+  (list 'arrow
         (compile-jojo (left-of '-> arrow))
         (compile-jojo (right-of '-> arrow))))
 
@@ -83,13 +83,14 @@
   (cond [(arrow? type)
          (compile-arrow (car type))]
         [else
-         (list 'pre-jojo (compile-jojo type))]))
+         (orz 'compile-type
+           ("type must be an arrow : ~a~%" type))]))
 
 (define (compile-body body)
   (map compile-arrow body))
 
 (define (compile-lambda lambda)
-  (list 'pre-lambda
+  (list 'lambda
         (compile-type (car (cdr lambda)))
         (compile-body (cdr (cdr lambda)))))
 
@@ -124,8 +125,8 @@
   (if type-check-flag
     (match meaning
       [{'meaning-jojo pt pjj}
-       (let ([t (car (unique-copy/pre-type pt '()))]
-             [jj (car (unique-copy/pre-jojo pjj '()))])
+       (let ([t pt]
+             [jj pjj])
          (type-check/jojo t jj))]))
   (if print-define-flag
     (let ()
@@ -153,8 +154,8 @@
   (if type-check-flag
     (match meaning
       [{'meaning-function pt pb}
-       (let ([t (car (unique-copy/pre-type pt '()))]
-             [b (car (unique-copy/pre-body pb '()))])
+       (let ([t pt]
+             [b pb])
          (type-check/function t b))]))
   (if print-define-flag
     (let ()
@@ -219,99 +220,6 @@
   (set! id/counter (+ 1 id/counter))
   (vector (cons n id/counter) ls))
 
-(define (unique-copy/pre-jojo pjj s)
-  (: pre-jojo scope -> {jojo scope})
-  (match pjj
-    [{} {{} s}]
-    [(pj . r)
-     (match (unique-copy/pre-jo pj s)
-       [{j s1}
-        (match (unique-copy/pre-jojo r s1)
-          [{jj s2}
-           {(cons j jj) s2}])])]))
-
-(define (unique-copy/pre-type pt s)
-  (match pt
-    [{'pre-arrow __ __} (unique-copy/pre-arrow pt s)]
-    [{'pre-jojo pjj} (unique-copy/pre-jojo pjj s)]))
-
-(define (unique-copy/pre-body pb s)
-  (match pb
-    [{} {{} s}]
-    [(pa . r)
-     (match (unique-copy/pre-arrow pa s)
-       [{a s1}
-        (match (unique-copy/pre-body r s1)
-          [{b s2}
-           {(cons a b) s2}])])]))
-
-(define (unique-copy/pre-jo pj s)
-  (: pre-jo scope -> {jo scope})
-  (case (car pj)
-    ['pre-var           (unique-copy/pre-var pj s)]
-    ['pre-call          (unique-copy/pre-call pj s)]
-    ['pre-apply         (unique-copy/pre-apply pj s)]
-    ['pre-arrow         (unique-copy/pre-arrow pj s)]
-    ['pre-lambda        (unique-copy/pre-lambda pj s)]
-    ['pre-ex-bind       (unique-copy/pre-ex-bind pj s)]
-    ['pre-im-bind       (unique-copy/pre-im-bind pj s)]))
-
-(define (unique-copy/pre-var pv s)
-  (match pv
-    [{'pre-var n}
-     (let ([found (assq n s)])
-       (if found
-         (let ([old-id (cdr found)])
-           {{'var old-id 0} s})
-         (let ([new-id (id/new n '())])
-           {{'var new-id 0}
-            (cons (cons n new-id) s)})))]))
-
-(define (unique-copy/pre-call pc s)
-  (match pc
-    [{'pre-call n}
-     {{'call n} s}]))
-
-(define (unique-copy/pre-apply pa s)
-  (match pa
-    [{'pre-apply} {{'apply} s}]))
-
-(define (unique-copy/pre-arrow pa s)
-  (match pa
-    [{'pre-arrow pjj1 pjj2}
-     (match (unique-copy/pre-jojo pjj1 s)
-       [{jj1 s1}
-        (match (unique-copy/pre-jojo pjj2 s1)
-          [{jj2 s2}
-           {{'arrow jj1 jj2} s2}])])]))
-
-(define (unique-copy/pre-lambda pl s)
-  (match pl
-    [{'pre-lambda pt pb}
-     (match (unique-copy/pre-type pt s)
-       [{t s1}
-        (match (unique-copy/pre-body pb s1)
-          [{b s2}
-           {{'lambda t b} s2}])])]))
-
-(define (unique-copy/pre-ex-bind pe s)
-  (match pe
-    [{'pre-ex-bind pj pjj}
-     (match (unique-copy/pre-jo pj s)
-       [{j s1}
-        (match (unique-copy/pre-jojo pjj s1)
-          [{jj s2}
-           {{'ex-bind j jj} s2}])])]))
-
-(define (unique-copy/pre-im-bind pi s)
-  (match pi
-    [{'pre-im-bind pj pjj}
-     (match (unique-copy/pre-jo pj s)
-       [{j s1}
-        (match (unique-copy/pre-jojo pjj s1)
-          [{jj s2}
-           {{'im-bind j jj} s2}])])]))
-
 (define (bs/commit)
   (define (recur bs0)
     (cond [(equal? '(commit-point) (car bs0))
@@ -357,7 +265,6 @@
 ;;   this helps commit
 
 ;; not using ><><><
-
 (define (bs/extend-new v d)
   (: var data -> !)
   (match v
@@ -718,18 +625,13 @@
   (match t
     [{'arrow ajj sjj}
      (length (call-with-output-to-new-ds
-              (lambda () (compose/jojo ajj))))]
-    [jj
-     0]))
+              (lambda () (compose/jojo ajj))))]))
 
 (define (type/output-number t)
   (match t
     [{'arrow ajj sjj}
      (length (call-with-output-to-new-ds
-              (lambda () (compose/jojo sjj))))]
-    [jj
-     (length (call-with-output-to-new-ds
-              (lambda () (compose/jojo jj))))]))
+              (lambda () (compose/jojo sjj))))]))
 
 (define (compose/call j)
   (match j
@@ -739,16 +641,15 @@
          (orz 'compose/call ("unknow name : ~a~%" n))
          (match (cdr found)
            [{'meaning-type-cons pt n nl}
-            (let ([len (type/input-number (car (unique-copy/pre-type pt '())))])
+            (let ([len (type/input-number pt)])
               (push ds {'cons n (fetch ds len)}))]
            [{'meaning-data-cons pt n n0}
-            (let ([len (type/input-number (car (unique-copy/pre-type pt '())))])
+            (let ([len (type/input-number pt)])
               (push ds {'cons n (fetch ds len)}))]
            [{'meaning-jojo pt pjj}
-            (push rs {0 compose rs/next (car (unique-copy/pre-jojo pjj '()))})]
+            (push rs {0 compose rs/next pjj})]
            [{'meaning-function pt pb}
-            (compose/function (car (unique-copy/pre-type pt '()))
-                              (car (unique-copy/pre-body pb '())))])))]))
+            (compose/function pt pb)])))]))
 
 (define (compose/function t b)
   ;; note that
@@ -789,9 +690,7 @@
   (let ([k (vector {'todo b dl})])
     (reverse
      (map (lambda (i) {'trunk t k i})
-       (genlist
-        (type/output-number
-         (car (unique-copy/pre-type pt '()))))))))
+       (genlist (type/output-number pt))))))
 
 (define (compose/apply j)
   (match (bs/walk (pop ds))
@@ -871,22 +770,15 @@
          (orz 'cut/call ("unknow name : ~a~%" n))
          (match (cdr found)
            [{'meaning-type-cons pt n nl}
-            (cut/type (car (unique-copy/pre-type pt '())))]
+            (cut/type pt)]
            [{'meaning-data-cons pt n n0}
-            (cut/type (car (unique-copy/pre-type pt '())))]
+            (cut/type pt)]
            [{'meaning-jojo pt pjj}
-            (cut/type (car (unique-copy/pre-type pt '())))]
+            (cut/type pt)]
            [{'meaning-function pt pb}
-            (cut/type (car (unique-copy/pre-type pt '())))])))]))
+            (cut/type pt)])))]))
 
-(define (cut/type t)
-  (match t
-    [{'arrow ajj sjj}
-     (cut/try-arrow t)]
-    [jj
-     (compose/jojo jj)]))
-
-(define (cut/try-arrow a)
+(define (cut/type a)
   (: arrow -> !)
   (match a
     [{'arrow ajj sjj}
@@ -946,8 +838,7 @@
   `($app (quote ,s)))
 
 (define ($app s)
-  (compose/jojo
-   (car (unique-copy/pre-jojo (compile/jojo s) '()))))
+  (compose/jojo (compile/jojo s)))
 
 (define (type-check/jojo t jj)
   (: type jojo -> bool)

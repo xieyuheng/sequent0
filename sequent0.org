@@ -3,7 +3,14 @@
 
 * todo
 
+  - no define-jojo
+    for we need a mini prototype language
+
   - new compiler with new syntax
+    we can simply view [] as () for now
+
+  - new compose/var cut/var
+
   - add a new field (which have two new lists) to arrow
     and use the rs to handle scope
 
@@ -54,8 +61,7 @@
       arrow              ~
       lambda             ~
       apply
-      ex-bind            jo   jojo
-      im-bind            jo   jojo)
+      ex-bind            jo   jojo)
     #+end_src
 
 *** meaning
@@ -140,19 +146,13 @@
              (eq? (car v) 'lambda)))
       (define (ex-bind? v)
         (and (list? v) (pair? v)
-             (not (equal? (car v) (vector 'flower-barcket/as-im-bind)))
-             (member ': v)))
-      (define (im-bind? v)
-        (and (list? v) (pair? v)
-             (equal? (car v) (vector 'flower-barcket/as-im-bind))
              (member ': v)))
       (cond [(var? jo)                (list 'var jo)]
             [(call? jo)               (list 'call jo)]
             [(apply? jo)              (list 'apply)]
             [(arrow? jo)              (compile-arrow jo)]
             [(lambda? jo)             (compile-lambda jo)]
-            [(ex-bind? jo)            (compile-ex-bind jo)]
-            [(im-bind? jo)            (compile-im-bind (cdr jo))]))
+            [(ex-bind? jo)            (compile-ex-bind jo)]))
     #+end_src
 
 *** compile-ex-bind
@@ -160,15 +160,6 @@
     #+begin_src scheme
     (define (compile-ex-bind jo)
       (list 'ex-bind
-            (compile-jo (car (right-of ': jo)))
-            (compile-jojo (left-of ': jo))))
-    #+end_src
-
-*** compile-im-bind
-
-    #+begin_src scheme
-    (define (compile-im-bind jo)
-      (list 'im-bind
             (compile-jo (car (right-of ': jo)))
             (compile-jojo (left-of ': jo))))
     #+end_src
@@ -222,17 +213,6 @@
 
 * define
 
-*** flower-barcket/as-im-bind
-
-    #+begin_src scheme
-    (define (flower-barcket/as-im-bind body)
-      (flower-barcket
-       (lambda (dl)
-         (cons (vector 'flower-barcket/as-im-bind)
-               dl))
-       body))
-    #+end_src
-
 *** print-define+ & print-define-
 
     #+begin_src scheme
@@ -249,49 +229,13 @@
     (define (type-check-) (set! type-check-flag #f))
     #+end_src
 
-*** define-jojo
+*** def
 
     #+begin_src scheme
-    (define-macro (define-jojo . body)
-      `(define-jojo1 . ,(flower-barcket/as-im-bind body)))
+    (define-macro (def head . tail)
+      `($def (quote ,head) (quote ,tail)))
 
-    (define-macro (define-jojo1 head . tail)
-      `($define-jojo (quote ,head) (quote ,tail)))
-
-    (define ($define-jojo head tail)
-      (define name (head->name head))
-      (define meaning
-        (list 'meaning-jojo
-              (compile-type (head->type head))
-              (compile-jojo tail)))
-      (push ns (cons name meaning))
-      (if type-check-flag
-        (match meaning
-          [{'meaning-jojo pt pjj}
-           (let ([t pt]
-                 [jj pjj])
-             (type-check/jojo t jj))]))
-      (if print-define-flag
-        (let ()
-          (display "\n")
-          (display "<define-jojo>\n")
-          (display ":name: ") (display name) (display "\n")
-          (display ":meaning:\n")
-          (display meaning) (display "\n")
-          (display "</define-jojo>\n")
-          (display "\n"))))
-    #+end_src
-
-*** define-function
-
-    #+begin_src scheme
-    (define-macro (define-function . body)
-      `(define-function1 . ,(flower-barcket/as-im-bind body)))
-
-    (define-macro (define-function1 head . tail)
-      `($define-function (quote ,head) (quote ,tail)))
-
-    (define ($define-function head tail)
+    (define ($def head tail)
       (define name (head->name head))
       (define meaning
         (list 'meaning-function
@@ -307,21 +251,18 @@
       (if print-define-flag
         (let ()
           (display "\n")
-          (display "<define-function>\n")
+          (display "<def>\n")
           (display ":name: ") (display name) (display "\n")
           (display ":meaning:\n")
           (display meaning) (display "\n")
-          (display "</define-function>\n")
+          (display "</def>\n")
           (display "\n"))))
     #+end_src
 
-*** define-type
+*** >< define-type
 
     #+begin_src scheme
-    (define-macro (define-type . body)
-      `(define-type1 . ,(flower-barcket/as-im-bind body)))
-
-    (define-macro (define-type1 head . tail)
+    (define-macro (define-type head . tail)
       `($define-type (quote ,head) (quote ,tail)))
 
     (define ($define-type head tail)
@@ -936,7 +877,6 @@
         ['call          (compose/call j)]
         ['apply         (compose/apply j)]
         ['ex-bind       (compose/ex-bind j)]
-        ['im-bind       (compose/im-bind j)]
         [__             (push ds j)]))
     #+end_src
 
@@ -1090,25 +1030,6 @@
                        vl)))]))
     #+end_src
 
-*** compose/im-bind
-
-    #+begin_src scheme
-    (define (compose/im-bind j)
-      (match j
-        [{'im-bind j vl}
-         (let* ([dl (call-with-output-to-new-ds
-                     (lambda ()
-                       (compose/jo j)))]
-                [d (car dl)])
-           (if (not (eq? (length dl) 1))
-             (orz 'compose/im-bind
-               ("jo should return one data~%")
-               ("but this jo does not : ~a~%" j))
-             (for-each (lambda (v)
-                         (bs/extend-up v d))
-                       vl)))]))
-    #+end_src
-
 * cut
 
 *** cut
@@ -1136,8 +1057,7 @@
         ['apply         (cut/apply j)]
         ['arrow         (cut/arrow j)]
         ['lambda        (cut/lambda j)]
-        ['ex-bind       (cut/ex-bind j)]
-        ['im-bind       (cut/im-bind j)]))
+        ['ex-bind       (cut/ex-bind j)]))
     #+end_src
 
 *** cut/var
@@ -1232,15 +1152,6 @@
     (define (cut/ex-bind j)
       (orz 'cut/ex-bind
         ("can not handle ex-bind as jo that is not in type~%")
-        ("jo : ~a~%" j)))
-    #+end_src
-
-*** cut/im-bind
-
-    #+begin_src scheme
-    (define (cut/im-bind j)
-      (orz 'cut/im-bind
-        ("can not handle im-bind as jo that is not in type~%")
         ("jo : ~a~%" j)))
     #+end_src
 

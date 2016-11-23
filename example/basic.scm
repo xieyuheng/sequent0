@@ -1,19 +1,19 @@
-(define nat
+(def nat
   (data type
     (: zero (-> [] [nat]))
     (: succ (-> [nat] [nat]))))
 
-(define add
+(def add
   (lambda (-> [nat nat] [nat])
     (-> [:m zero] [:m])
     (-> [:m :n succ] [:m :n add succ])))
 
-(define mul
+(def mul
   (lambda (-> [nat nat] [nat])
     (-> [:m zero] [zero])
     (-> [:m :n succ] [:m :n mul :m add])))
 
-(define factorial
+(def factorial
   (lambda (-> [nat] [nat])
     (-> [zero] [zero succ])
     (-> [:n succ] [:n factorial :n succ mul])))
@@ -29,7 +29,7 @@
 (run zero succ succ succ
      factorial)
 
-(define nat-induction
+(def nat-induction
   (lambda (-> [(: :p (-> nat type))
                zero :p @
                (-> [(: :k nat) :k :p @]
@@ -42,27 +42,27 @@
          :q :q/z :q/s :n nat-induction
          :q/s @])))
 
-(define drop
+(def drop
   (lambda (-> [:t] [])
     (-> [:d]
         [])))
 
-(define dup
+(def dup
   (lambda (-> [:t] [:t :t])
     (-> [:d]
         [:d :d])))
 
-(define over
+(def over
   (lambda (-> [:t1 :t2] [:t1 :t2 :t1])
     (-> [:d1 :d2]
         [:d1 :d2 :d1])))
 
-(define tuck
+(def tuck
   (lambda (-> [:t1 :t2] [:t2 :t1 :t2])
     (-> [:d1 :d2]
         [:d2 :d1 :d2])))
 
-(define swap
+(def swap
   (lambda (-> [:t1 :t2] [:t2 :t1])
     (-> [:d1 :d2]
         [:d2 :d1])))
@@ -73,17 +73,17 @@
      drop
      dup)
 
-(define list
+(def list
   (data (-> [type] [type])
     (: null (-> [] [:t list]))
     (: cons (-> [:t list :t] [:t list]))))
 
-(define append
+(def append
   (lambda (-> [:t list :t list] [:t list])
     (-> [:l null] [:l])
     (-> [:l :r :e cons] [:l :r append :e cons])))
 
-(define length
+(def length
   (lambda (-> [:t list] [nat])
     (-> [null] [zero])
     (-> [:l :e cons] [:l length succ])))
@@ -103,7 +103,7 @@
      append
      length)
 
-(define map
+(def map
   (lambda (-> [:t1 list (-> :t1 :t2)]
               [:t2 list])
     (-> [null :f] [null])
@@ -128,25 +128,25 @@
        (-> [zero] [zero succ]))
      map)
 
-(define has-length
+(def has-length
   (data (-> [:t list nat] [type])
     (: null/has-length (-> [] [null zero has-length]))
     (: cons/has-length (-> [:l :n has-length]
                            [:l :a cons :n succ has-length]))))
 
-(define map/has-length
+(def map/has-length
   (lambda (-> [:l :n has-length]
               [:l :f map :n has-length])
     (-> [null/has-length] [null/has-length])
     (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
 
-(define vector
+(def vector
   (data (-> [nat type] [type])
     (: null (-> [] [zero :t vector]))
     (: cons (-> [:n :t vector :t]
                 [:n succ :t vector]))))
 
-(define append
+(def append
   (lambda (-> [:m :t vector :n :t vector]
               [:m :n add :t vector])
     (-> [:l null] [:l])
@@ -164,7 +164,7 @@
      append)
 
 
-(define map
+(def map
   (lambda (-> [:n :t1 vector (-> :t1 :t2)]
               [:n :t2 vector])
     (-> [null :f] [null])

@@ -37,69 +37,42 @@
     (eq? v 'apply))
   (define (arrow? v)
     (and (list? v)
-         (member '-> v)))
+         (eq? (car v) '->)))
   (define (lambda? v)
     (and (list? v)
          (eq? (car v) 'lambda)))
   (define (ex-bind? v)
     (and (list? v) (pair? v)
-         (not (equal? (car v) (vector 'flower-barcket/as-im-bind)))
-         (member ': v)))
-  (define (im-bind? v)
-    (and (list? v) (pair? v)
-         (equal? (car v) (vector 'flower-barcket/as-im-bind))
-         (member ': v)))
+         (eq? (car v) ':)))
   (cond [(var? jo)                (list 'var jo)]
         [(call? jo)               (list 'call jo)]
         [(apply? jo)              (list 'apply)]
         [(arrow? jo)              (compile-arrow jo)]
         [(lambda? jo)             (compile-lambda jo)]
-        [(ex-bind? jo)            (compile-ex-bind jo)]
-        [(im-bind? jo)            (compile-im-bind (cdr jo))]))
+        [(ex-bind? jo)            (compile-ex-bind jo)]))
 
 (define (compile-ex-bind jo)
   (list 'ex-bind
-        (compile-jo (car (right-of ': jo)))
-        (compile-jojo (left-of ': jo))))
-
-(define (compile-im-bind jo)
-  (list 'im-bind
-        (compile-jo (car (right-of ': jo)))
-        (compile-jojo (left-of ': jo))))
+        (compile-jo (cadr jo))
+        (compile-jojo (cddr jo))))
 
 (define (compile-jojo jojo)
   (map compile-jo jojo))
 
-(define (compile-arrow arrow)
-  (list 'arrow
-        (compile-jojo (left-of '-> arrow))
-        (compile-jojo (right-of '-> arrow))))
+(define (compile-arrow a)
+  (match a
+    [{'-> ac sc}
+     {'arrow (compile-jojo ac) (compile-jojo sc)}]))
 
-(define (compile-type type)
-  (define (arrow? s)
-    (and (eq? (length s) 1)
-         (list? (car s))
-         (member '-> (car s))))
-  (cond [(arrow? type)
-         (compile-arrow (car type))]
-        [else
-         (orz 'compile-type
-           ("type must be an arrow : ~a~%" type))]))
+(define compile-type compile-arrow)
 
 (define (compile-body body)
   (map compile-arrow body))
 
 (define (compile-lambda lambda)
   (list 'lambda
-        (compile-type (car (cdr lambda)))
-        (compile-body (cdr (cdr lambda)))))
-
-(define (flower-barcket/as-im-bind body)
-  (flower-barcket
-   (lambda (dl)
-     (cons (vector 'flower-barcket/as-im-bind)
-           dl))
-   body))
+        (compile-type (cadr lambda))
+        (compile-body (cddr lambda))))
 
 (define print-define-flag #f)
 (define (print-define+) (set! print-define-flag #t))
@@ -109,42 +82,10 @@
 (define (type-check+) (set! type-check-flag #t))
 (define (type-check-) (set! type-check-flag #f))
 
-(define-macro (define-jojo . body)
-  `(define-jojo1 . ,(flower-barcket/as-im-bind body)))
+(define-macro (def head . tail)
+  `($def (quote ,head) (quote ,tail)))
 
-(define-macro (define-jojo1 head . tail)
-  `($define-jojo (quote ,head) (quote ,tail)))
-
-(define ($define-jojo head tail)
-  (define name (head->name head))
-  (define meaning
-    (list 'meaning-jojo
-          (compile-type (head->type head))
-          (compile-jojo tail)))
-  (push ns (cons name meaning))
-  (if type-check-flag
-    (match meaning
-      [{'meaning-jojo pt pjj}
-       (let ([t pt]
-             [jj pjj])
-         (type-check/jojo t jj))]))
-  (if print-define-flag
-    (let ()
-      (display "\n")
-      (display "<define-jojo>\n")
-      (display ":name: ") (display name) (display "\n")
-      (display ":meaning:\n")
-      (display meaning) (display "\n")
-      (display "</define-jojo>\n")
-      (display "\n"))))
-
-(define-macro (define-function . body)
-  `(define-function1 . ,(flower-barcket/as-im-bind body)))
-
-(define-macro (define-function1 head . tail)
-  `($define-function (quote ,head) (quote ,tail)))
-
-(define ($define-function head tail)
+(define ($def head tail)
   (define name (head->name head))
   (define meaning
     (list 'meaning-function
@@ -160,17 +101,14 @@
   (if print-define-flag
     (let ()
       (display "\n")
-      (display "<define-function>\n")
+      (display "<def>\n")
       (display ":name: ") (display name) (display "\n")
       (display ":meaning:\n")
       (display meaning) (display "\n")
-      (display "</define-function>\n")
+      (display "</def>\n")
       (display "\n"))))
 
-(define-macro (define-type . body)
-  `(define-type1 . ,(flower-barcket/as-im-bind body)))
-
-(define-macro (define-type1 head . tail)
+(define-macro (define-type head . tail)
   `($define-type (quote ,head) (quote ,tail)))
 
 (define ($define-type head tail)
@@ -610,7 +548,6 @@
     ['call          (compose/call j)]
     ['apply         (compose/apply j)]
     ['ex-bind       (compose/ex-bind j)]
-    ['im-bind       (compose/im-bind j)]
     [__             (push ds j)]))
 
 (define (compose/jojo jj) (for-each compose/jo jj))
@@ -715,21 +652,6 @@
                      (push ds {'bind d v}))
                    vl)))]))
 
-(define (compose/im-bind j)
-  (match j
-    [{'im-bind j vl}
-     (let* ([dl (call-with-output-to-new-ds
-                 (lambda ()
-                   (compose/jo j)))]
-            [d (car dl)])
-       (if (not (eq? (length dl) 1))
-         (orz 'compose/im-bind
-           ("jo should return one data~%")
-           ("but this jo does not : ~a~%" j))
-         (for-each (lambda (v)
-                     (bs/extend-up v d))
-                   vl)))]))
-
 (define (cut)
   (match (pop rs)
     [{c ex end jj}
@@ -748,8 +670,7 @@
     ['apply         (cut/apply j)]
     ['arrow         (cut/arrow j)]
     ['lambda        (cut/lambda j)]
-    ['ex-bind       (cut/ex-bind j)]
-    ['im-bind       (cut/im-bind j)]))
+    ['ex-bind       (cut/ex-bind j)]))
 
 (define (cut/var j)
   ;; (if (var/fresh? j)
@@ -818,11 +739,6 @@
 (define (cut/ex-bind j)
   (orz 'cut/ex-bind
     ("can not handle ex-bind as jo that is not in type~%")
-    ("jo : ~a~%" j)))
-
-(define (cut/im-bind j)
-  (orz 'cut/im-bind
-    ("can not handle im-bind as jo that is not in type~%")
     ("jo : ~a~%" j)))
 
 (define (call-with-output-to-new-ds f)

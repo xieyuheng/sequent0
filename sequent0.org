@@ -3,9 +3,6 @@
 
 * todo
 
-  - no define-jojo
-    for we need a mini prototype language
-
   - new compiler with new syntax
     we can simply view [] as () for now
 
@@ -39,7 +36,7 @@
       cons               name {data ...}
       arrow              local jojo jojo
       lambda             arrow body
-      bind               data sub-data
+      bind               var data
       trunk              type (vector trunky) index)
 
     (type local          occur-list bind-list)
@@ -140,13 +137,13 @@
         (eq? v 'apply))
       (define (arrow? v)
         (and (list? v)
-             (member '-> v)))
+             (eq? (car v) '->)))
       (define (lambda? v)
         (and (list? v)
              (eq? (car v) 'lambda)))
       (define (ex-bind? v)
         (and (list? v) (pair? v)
-             (member ': v)))
+             (eq? (car v) ':)))
       (cond [(var? jo)                (list 'var jo)]
             [(call? jo)               (list 'call jo)]
             [(apply? jo)              (list 'apply)]
@@ -160,8 +157,8 @@
     #+begin_src scheme
     (define (compile-ex-bind jo)
       (list 'ex-bind
-            (compile-jo (car (right-of ': jo)))
-            (compile-jojo (left-of ': jo))))
+            (compile-jo (cadr jo))
+            (compile-jojo (cddr jo))))
     #+end_src
 
 *** compile-jojo
@@ -174,25 +171,16 @@
 *** compile-arrow
 
     #+begin_src scheme
-    (define (compile-arrow arrow)
-      (list 'arrow
-            (compile-jojo (left-of '-> arrow))
-            (compile-jojo (right-of '-> arrow))))
+    (define (compile-arrow a)
+      (match a
+        [{'-> ac sc}
+         {'arrow (compile-jojo ac) (compile-jojo sc)}]))
     #+end_src
 
 *** compile-type
 
     #+begin_src scheme
-    (define (compile-type type)
-      (define (arrow? s)
-        (and (eq? (length s) 1)
-             (list? (car s))
-             (member '-> (car s))))
-      (cond [(arrow? type)
-             (compile-arrow (car type))]
-            [else
-             (orz 'compile-type
-               ("type must be an arrow : ~a~%" type))]))
+    (define compile-type compile-arrow)
     #+end_src
 
 *** compile-body
@@ -207,8 +195,8 @@
     #+begin_src scheme
     (define (compile-lambda lambda)
       (list 'lambda
-            (compile-type (car (cdr lambda)))
-            (compile-body (cdr (cdr lambda)))))
+            (compile-type (cadr lambda))
+            (compile-body (cddr lambda))))
     #+end_src
 
 * define

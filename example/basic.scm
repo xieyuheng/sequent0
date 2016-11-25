@@ -1,7 +1,7 @@
 (def nat
   (data type
-    (: zero (-> [] [nat]))
-    (: succ (-> [nat] [nat]))))
+    zero (-> [] [nat])
+    succ (-> [nat] [nat])))
 
 (def add
   (lambda (-> [nat nat] [nat])
@@ -75,8 +75,8 @@
 
 (def list
   (data (-> [type] [type])
-    (: null (-> [] [:t list]))
-    (: cons (-> [:t list :t] [:t list]))))
+    null (-> [] [:t list])
+    cons (-> [:t list :t] [:t list])))
 
 (def append
   (lambda (-> [:t list :t list] [:t list])
@@ -130,9 +130,9 @@
 
 (def has-length
   (data (-> [:t list nat] [type])
-    (: null/has-length (-> [] [null zero has-length]))
-    (: cons/has-length (-> [:l :n has-length]
-                           [:l :a cons :n succ has-length]))))
+    null/has-length (-> [] [null zero has-length])
+    cons/has-length (-> [:l :n has-length]
+                        [:l :a cons :n succ has-length])))
 
 (def map/has-length
   (lambda (-> [:l :n has-length]
@@ -142,9 +142,9 @@
 
 (def vector
   (data (-> [nat type] [type])
-    (: null (-> [] [zero :t vector]))
-    (: cons (-> [:n :t vector :t]
-                [:n succ :t vector]))))
+    null (-> [] [zero :t vector])
+    cons (-> [:n :t vector :t]
+             [:n succ :t vector])))
 
 (def append
   (lambda (-> [:m :t vector :n :t vector]

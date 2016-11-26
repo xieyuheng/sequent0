@@ -85,6 +85,7 @@
     (type gs {{counter explainer ender {data-list data-list}} ...})
     #+end_src
 
+
 * stack
 
   #+begin_src scheme
@@ -111,201 +112,6 @@
          ,v)))
   #+end_src
 
-* compile
-
-*** help
-
-    #+begin_src scheme
-    (define (head->name head)
-      (car head))
-
-    (define (head->type head)
-      (cdr (cdr head)))
-    #+end_src
-
-*** compile-jo
-
-    #+begin_src scheme
-    (define (compile-jo jo)
-      (define (var? v)
-        (and (symbol? v)
-             (equal? ":" (substring (symbol->string v) 0 1))))
-      (define (call? v)
-        (and (symbol? v)
-             (not (eq? ":" (substring (symbol->string v) 0 1)))))
-      (define (apply? v)
-        (eq? v 'apply))
-      (define (arrow? v)
-        (and (list? v)
-             (eq? (car v) '->)))
-      (define (lambda? v)
-        (and (list? v)
-             (eq? (car v) 'lambda)))
-      (define (ex-bind? v)
-        (and (list? v) (pair? v)
-             (eq? (car v) ':)))
-      (cond [(var? jo)                (list 'var jo)]
-            [(call? jo)               (list 'call jo)]
-            [(apply? jo)              (list 'apply)]
-            [(arrow? jo)              (compile-arrow jo)]
-            [(lambda? jo)             (compile-lambda jo)]
-            [(ex-bind? jo)            (compile-ex-bind jo)]))
-    #+end_src
-
-*** compile-ex-bind
-
-    #+begin_src scheme
-    (define (compile-ex-bind jo)
-      (list 'ex-bind
-            (compile-jo (cadr jo))
-            (compile-jojo (cddr jo))))
-    #+end_src
-
-*** compile-jojo
-
-    #+begin_src scheme
-    (define (compile-jojo jojo)
-      (map compile-jo jojo))
-    #+end_src
-
-*** compile-arrow
-
-    #+begin_src scheme
-    (define (compile-arrow a)
-      (match a
-        [{'-> ac sc}
-         {'arrow (compile-jojo ac) (compile-jojo sc)}]))
-    #+end_src
-
-*** compile-type
-
-    #+begin_src scheme
-    (define compile-type compile-arrow)
-    #+end_src
-
-*** compile-body
-
-    #+begin_src scheme
-    (define (compile-body body)
-      (map compile-arrow body))
-    #+end_src
-
-*** compile-lambda
-
-    #+begin_src scheme
-    (define (compile-lambda lambda)
-      (list 'lambda
-            (compile-type (cadr lambda))
-            (compile-body (cddr lambda))))
-    #+end_src
-
-* define
-
-*** print-define+ & print-define-
-
-    #+begin_src scheme
-    (define print-define-flag #f)
-    (define (print-define+) (set! print-define-flag #t))
-    (define (print-define-) (set! print-define-flag #f))
-    #+end_src
-
-*** type-check+ & type-check-
-
-    #+begin_src scheme
-    (define type-check-flag #f)
-    (define (type-check+) (set! type-check-flag #t))
-    (define (type-check-) (set! type-check-flag #f))
-    #+end_src
-
-*** def
-
-    #+begin_src scheme
-    (define-macro (def head . tail)
-      `($def (quote ,head) (quote ,tail)))
-
-    (define ($def head tail)
-      (define name (head->name head))
-      (define meaning
-        (list 'meaning-function
-              (compile-type (head->type head))
-              (compile-body tail)))
-      (push ns (cons name meaning))
-      (if type-check-flag
-        (match meaning
-          [{'meaning-function pt pb}
-           (let ([t pt]
-                 [b pb])
-             (type-check/function t b))]))
-      (if print-define-flag
-        (let ()
-          (display "\n")
-          (display "<def>\n")
-          (display ":name: ") (display name) (display "\n")
-          (display ":meaning:\n")
-          (display meaning) (display "\n")
-          (display "</def>\n")
-          (display "\n"))))
-    #+end_src
-
-*** >< define-type
-
-    #+begin_src scheme
-    (define-macro (define-type head . tail)
-      `($define-type (quote ,head) (quote ,tail)))
-
-    (define ($define-type head tail)
-      (define name (head->name head))
-      (define data-name-list (map car tail))
-      (define meaning
-        (list 'meaning-type-cons
-              (compile-type (head->type head))
-              name
-              data-name-list))
-      (push ns (cons name meaning))
-      (if print-define-flag
-        (let ()
-          (display "\n")
-          (display "<define-type>\n")
-          (display ":name: ") (display name) (display "\n")
-          (display ":meaning:\n")
-          (display meaning) (display "\n")
-          (display "</define-type>\n")
-          (display "\n")))
-      (map (lambda (h)
-             ($define-data h name))
-        tail)
-      (void))
-
-    (define ($define-data head type-name)
-      (define name (head->name head))
-      (define meaning
-        (list 'meaning-data-cons
-              (compile-type (head->type head))
-              name
-              type-name))
-      (push ns (cons name meaning))
-      (if print-define-flag
-        (let ()
-          (display "\n")
-          (display "<define-data>\n")
-          (display ":name: ") (display name) (display "\n")
-          (display ":meaning:\n")
-          (display meaning) (display "\n")
-          (display "</define-data>\n")
-          (display "\n"))))
-    #+end_src
-
-* ><><><
-
-*** id/new
-
-    #+begin_src scheme
-    (define id/counter 0)
-
-    (define (id/new n ls)
-      (set! id/counter (+ 1 id/counter))
-      (vector (cons n id/counter) ls))
-    #+end_src
 
 * bs
 
@@ -822,6 +628,7 @@
                            [else #f])])])])))
     #+end_src
 
+
 * rs
 
 *** rs/exit
@@ -869,9 +676,6 @@
     #+end_src
 
 *** compose/jojo
-
-    - ><><><
-      maybe do not need this
 
     #+begin_src scheme
     (define (compose/jojo jj) (for-each compose/jo jj))
@@ -1158,6 +962,203 @@
           new-ds)))
     #+end_src
 
+
+* def
+
+*** runtime flag
+
+    #+begin_src scheme
+    (define print-define-flag #f)
+    (define (print-define+) (set! print-define-flag #t))
+    (define (print-define-) (set! print-define-flag #f))
+
+    (define type-check-flag #f)
+    (define (type-check+) (set! type-check-flag #t))
+    (define (type-check-) (set! type-check-flag #f))
+    #+end_src
+
+*** def
+
+    #+begin_src scheme
+    (define-macro (def head . tail)
+      `($def (quote ,head) (quote ,tail)))
+
+    (define ($def head tail)
+      )
+    #+end_src
+
+*** def lambda
+
+*** def data
+*** [old] def
+
+    #+begin_src scheme
+    (define-macro (def head . tail)
+      `($def (quote ,head) (quote ,tail)))
+
+    (define ($def head tail)
+      (define name (car head))
+      (define meaning
+        (list 'meaning-function
+              (compile-type (cddr head))
+              (compile-body tail)))
+      (push ns (cons name meaning))
+      (if type-check-flag
+        (match meaning
+          [{'meaning-function pt pb}
+           (let ([t pt]
+                 [b pb])
+             (type-check/function t b))]))
+      (if print-define-flag
+        (let ()
+          (display "\n")
+          (display "<def>\n")
+          (display ":name: ") (display name) (display "\n")
+          (display ":meaning:\n")
+          (display meaning) (display "\n")
+          (display "</def>\n")
+          (display "\n"))))
+    #+end_src
+
+*** >< [old] define-type
+
+    #+begin_src scheme
+    (define-macro (define-type head . tail)
+      `($define-type (quote ,head) (quote ,tail)))
+
+    (define ($define-type head tail)
+      (define name (car head))
+      (define data-name-list (map car tail))
+      (define meaning
+        (list 'meaning-type-cons
+              (compile-type (cddr head))
+              name
+              data-name-list))
+      (push ns (cons name meaning))
+      (if print-define-flag
+        (let ()
+          (display "\n")
+          (display "<define-type>\n")
+          (display ":name: ") (display name) (display "\n")
+          (display ":meaning:\n")
+          (display meaning) (display "\n")
+          (display "</define-type>\n")
+          (display "\n")))
+      (map (lambda (h)
+             ($define-data h name))
+        tail)
+      (void))
+
+    (define ($define-data head type-name)
+      (define name (car head))
+      (define meaning
+        (list 'meaning-data-cons
+              (compile-type (cddr head))
+              name
+              type-name))
+      (push ns (cons name meaning))
+      (if print-define-flag
+        (let ()
+          (display "\n")
+          (display "<define-data>\n")
+          (display ":name: ") (display name) (display "\n")
+          (display ":meaning:\n")
+          (display meaning) (display "\n")
+          (display "</define-data>\n")
+          (display "\n"))))
+    #+end_src
+
+* compile
+
+*** compile-jo
+
+    #+begin_src scheme
+    (define (compile-jo jo)
+      (define (var? v)
+        (and (symbol? v)
+             (equal? ":" (substring (symbol->string v) 0 1))))
+      (define (call? v)
+        (and (symbol? v)
+             (not (eq? ":" (substring (symbol->string v) 0 1)))))
+      (define (apply? v)
+        (eq? v 'apply))
+      (define (arrow? v)
+        (and (list? v)
+             (pair? v)
+             (eq? (car v) '->)))
+      (define (lambda? v)
+        (and (list? v)
+             (pair? v)
+             (eq? (car v) 'lambda)))
+      (define (ex-bind? v)
+        (and (list? v)
+             (pair? v)
+             (eq? (car v) ':)))
+      (cond [(var? jo)                (list 'var jo)]
+            [(call? jo)               (list 'call jo)]
+            [(apply? jo)              (list 'apply)]
+            [(arrow? jo)              (compile-arrow jo)]
+            [(lambda? jo)             (compile-lambda jo)]
+            [(ex-bind? jo)            (compile-ex-bind jo)]))
+    #+end_src
+
+*** compile-jojo
+
+    #+begin_src scheme
+    (define (compile-jojo jojo)
+      (map compile-jo jojo))
+    #+end_src
+
+*** compile-ex-bind
+
+    #+begin_src scheme
+    (define (compile-ex-bind jo)
+      (list 'ex-bind
+            (compile-jo (cadr jo))
+            (compile-jojo (cddr jo))))
+    #+end_src
+
+*** compile-arrow
+
+    #+begin_src scheme
+    (define (compile-arrow a)
+      (match a
+        [{'-> ac sc}
+         {'arrow (compile-jojo ac) (compile-jojo sc)}]))
+    #+end_src
+
+*** compile-type
+
+    #+begin_src scheme
+    (define compile-type compile-arrow)
+    #+end_src
+
+*** compile-body
+
+    #+begin_src scheme
+    (define (compile-body b)
+      (map compile-arrow b))
+    #+end_src
+
+*** compile-lambda
+
+    #+begin_src scheme
+    (define (compile-lambda l)
+      (list 'lambda
+            (compile-type (cadr l))
+            (compile-body (cddr l))))
+    #+end_src
+
+* >< id/new
+
+  #+begin_src scheme
+  (define id/counter 0)
+
+  (define (id/new n ls)
+    (set! id/counter (+ 1 id/counter))
+    (vector (cons n id/counter) ls))
+  #+end_src
+
 * top-level
 
 *** app
@@ -1168,30 +1169,6 @@
 
     (define ($app s)
       (compose/jojo (compile/jojo s)))
-    #+end_src
-
-*** type-check/jojo
-
-    #+begin_src scheme
-    (define (type-check/jojo t jj)
-      (: type jojo -> bool)
-      (match t
-        [{'arrow tajj tsjj}
-         (let* ([dl1 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs {0 compose rs/exit tajj})
-                        (rs/next)
-                        (push rs {0 cut rs/exit jj})
-                        (rs/next)))]
-                [dl2 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs {0 compose rs/exit tsjj})
-                        (rs/next)))])
-           (push gs {0 unify gs/exit {dl1 dl2}})
-           (cond [(gs/exit)
-                  #t]
-                 [else (orz 'type-check/jojo
-                         ("cover fail~%"))]))]))
     #+end_src
 
 *** note type-check/function without bind-unify

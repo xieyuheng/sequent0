@@ -30,13 +30,13 @@
      factorial)
 
 (def nat-induction
-  (lambda (-> [(: :p (-> nat type))
+  (lambda (-> [(: :p (-> [nat] [type]))
                zero :p @
                (-> [(: :k nat) :k :p @]
                    [:k succ :p @])
                (: :x nat)]
-              [:x :p @])
-    (-> [:q :q/z :q/s zero] :q/z)
+              [[:x :p @]])
+    (-> [:q :q/z :q/s zero] [:q/z])
     (-> [:q :q/z :q/s :n succ]
         [:n
          :q :q/z :q/s :n nat-induction
@@ -104,7 +104,7 @@
      length)
 
 (def map
-  (lambda (-> [:t1 list (-> :t1 :t2)]
+  (lambda (-> [:t1 list (-> [:t1] [:t2])]
               [:t2 list])
     (-> [null :f] [null])
     (-> [:l :e cons :f] [:l :f map :e :f @ cons])))
@@ -165,7 +165,7 @@
 
 
 (def map
-  (lambda (-> [:n :t1 vector (-> :t1 :t2)]
+  (lambda (-> [:n :t1 vector (-> [:t1] [:t2])]
               [:n :t2 vector])
     (-> [null :f] [null])
     (-> [:l :e cons :f] [:l :f map :e :f @ cons])))

@@ -3,13 +3,10 @@
 
 * todo
 
-  - new compiler with new syntax
-    we can simply view [] as () for now
-
-  - new compose/var cut/var
-
-  - add a new field (which have two new lists) to arrow
-    and use the rs to handle scope
+  - new 'arrow with a new field
+    which have two new lists
+    and new compose/var cut/var
+    which use the rs to handle scope
 
 * note
 
@@ -65,10 +62,9 @@
 
     #+begin_src scheme :tangle no
     (type meaning
-      meaning-type-cons  type name {name ...}
-      meaning-data-cons  type name name
-      meaning-jojo       type jojo
-      meaning-function   type body)
+      meaning-type      type name {name ...}
+      meaning-data      type name name
+      meaning-lambda    type body)
     #+end_src
 
 *** stack
@@ -734,15 +730,13 @@
            (if (not found)
              (orz 'compose/call ("unknow name : ~a~%" n))
              (match (cdr found)
-               [{'meaning-type-cons pt n nl}
+               [{'meaning-type pt n nl}
                 (let ([len (type/input-number pt)])
                   (push ds {'cons n (fetch ds len)}))]
-               [{'meaning-data-cons pt n n0}
+               [{'meaning-data pt n n0}
                 (let ([len (type/input-number pt)])
                   (push ds {'cons n (fetch ds len)}))]
-               [{'meaning-jojo pt pjj}
-                (push rs {0 compose rs/next pjj})]
-               [{'meaning-function pt pb}
+               [{'meaning-lambda pt pb}
                 (compose/function pt pb)])))]))
 
     (define (compose/function t b)
@@ -877,13 +871,11 @@
            (if (not found)
              (orz 'cut/call ("unknow name : ~a~%" n))
              (match (cdr found)
-               [{'meaning-type-cons pt n nl}
+               [{'meaning-type pt n nl}
                 (cut/type pt)]
-               [{'meaning-data-cons pt n n0}
+               [{'meaning-data pt n n0}
                 (cut/type pt)]
-               [{'meaning-jojo pt pjj}
-                (cut/type pt)]
-               [{'meaning-function pt pb}
+               [{'meaning-lambda pt pb}
                 (cut/type pt)])))]))
 
     (define (cut/type a)
@@ -980,92 +972,98 @@
 *** def
 
     #+begin_src scheme
-    (define-macro (def head . tail)
-      `($def (quote ,head) (quote ,tail)))
+    (define-macro (def name body)
+      `($def (quote ,name) (quote ,body)))
 
-    (define ($def head tail)
-      )
+    (define ($def name body)
+      (let ([key (car body)])
+        ((find-key key) name body)))
+
+    (define key-record '())
+
+    (define (new-key key fun)
+      (set! key-record
+            (cons (cons key fun)
+                  key-record)))
+
+    (define (find-key key)
+      (let ([found (assq key key-record)])
+        (if found
+          (cdr found)
+          (orz 'find-key
+            ("can not find key : ~a~%" key)))))
     #+end_src
 
-*** def lambda
-
-*** def data
-*** [old] def
+*** def-lambda
 
     #+begin_src scheme
-    (define-macro (def head . tail)
-      `($def (quote ,head) (quote ,tail)))
+    (define (def-lambda n body)
+      (let* ([a (compile-arrow (cadr body))]
+             [al (compile-body (cddr body))]
+             [meaning (list 'meaning-lambda a al)])
+        (push ns (cons n meaning))
+        (if type-check-flag
+          (type-check/function a al))
+        (if print-define-flag
+          (let ()
+            (display "\n")
+            (display "<def-lambda>\n")
+            (display ":name: ") (display n) (display "\n")
+            (display ":meaning:\n")
+            (display meaning) (display "\n")
+            (display "</def-lambda>\n")
+            (display "\n")))))
 
-    (define ($def head tail)
-      (define name (car head))
-      (define meaning
-        (list 'meaning-function
-              (compile-type (cddr head))
-              (compile-body tail)))
-      (push ns (cons name meaning))
-      (if type-check-flag
-        (match meaning
-          [{'meaning-function pt pb}
-           (let ([t pt]
-                 [b pb])
-             (type-check/function t b))]))
-      (if print-define-flag
-        (let ()
-          (display "\n")
-          (display "<def>\n")
-          (display ":name: ") (display name) (display "\n")
-          (display ":meaning:\n")
-          (display meaning) (display "\n")
-          (display "</def>\n")
-          (display "\n"))))
+    (new-key 'lambda def-lambda)
     #+end_src
 
-*** >< [old] define-type
+*** def-type & def-data
+
+    - no type checking on def-type and def-data
 
     #+begin_src scheme
-    (define-macro (define-type head . tail)
-      `($define-type (quote ,head) (quote ,tail)))
+    (define (pair-even-list l)
+      (match l
+        [{} '()]
+        [{x} (orz 'pair-even-list
+               ("meet uneven list with ending : ~a~%" x))]
+        [(x y . z) (cons (cons x y)
+                         (pair-even-list z))]))
 
-    (define ($define-type head tail)
-      (define name (car head))
-      (define data-name-list (map car tail))
-      (define meaning
-        (list 'meaning-type-cons
-              (compile-type (cddr head))
-              name
-              data-name-list))
-      (push ns (cons name meaning))
-      (if print-define-flag
-        (let ()
-          (display "\n")
-          (display "<define-type>\n")
-          (display ":name: ") (display name) (display "\n")
-          (display ":meaning:\n")
-          (display meaning) (display "\n")
-          (display "</define-type>\n")
-          (display "\n")))
-      (map (lambda (h)
-             ($define-data h name))
-        tail)
-      (void))
+    (define (def-type n body)
+      (let* ([a (compile-arrow (cadr body))]
+             [pl (pair-even-list (cddr body))]
+             [nl (map car pl)]
+             [meaning (list 'meaning-type a n nl)])
+        (push ns (cons n meaning ))
+        (if print-define-flag
+          (let ()
+            (display "\n")
+            (display "<def-type>\n")
+            (display ":name: ") (display n) (display "\n")
+            (display ":meaning:\n")
+            (display meaning) (display "\n")
+            (display "</def-type>\n")
+            (display "\n")))
+        (for-each (lambda (p) (def-data n p))
+                  pl)))
 
-    (define ($define-data head type-name)
-      (define name (car head))
-      (define meaning
-        (list 'meaning-data-cons
-              (compile-type (cddr head))
-              name
-              type-name))
-      (push ns (cons name meaning))
-      (if print-define-flag
-        (let ()
-          (display "\n")
-          (display "<define-data>\n")
-          (display ":name: ") (display name) (display "\n")
-          (display ":meaning:\n")
-          (display meaning) (display "\n")
-          (display "</define-data>\n")
-          (display "\n"))))
+    (new-key 'type def-type)
+
+    (define (def-data n0 p)
+      (let* ([n (car p)]
+             [a (compile-arrow (cdr p))]
+             [meaning (list 'meaning-data a n n0)])
+        (push ns (cons n meaning))
+        (if print-define-flag
+          (let ()
+            (display "\n")
+            (display "<def-data>\n")
+            (display ":name: ") (display n) (display "\n")
+            (display ":meaning:\n")
+            (display meaning) (display "\n")
+            (display "</def-data>\n")
+            (display "\n")))))
     #+end_src
 
 * compile
@@ -1127,12 +1125,6 @@
          {'arrow (compile-jojo ac) (compile-jojo sc)}]))
     #+end_src
 
-*** compile-type
-
-    #+begin_src scheme
-    (define compile-type compile-arrow)
-    #+end_src
-
 *** compile-body
 
     #+begin_src scheme
@@ -1145,7 +1137,7 @@
     #+begin_src scheme
     (define (compile-lambda l)
       (list 'lambda
-            (compile-type (cadr l))
+            (compile-arrow (cadr l))
             (compile-body (cddr l))))
     #+end_src
 

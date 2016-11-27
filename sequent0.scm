@@ -20,144 +20,6 @@
        (set! ,s (drop ,s ,n))
        ,v)))
 
-(define (head->name head)
-  (car head))
-
-(define (head->type head)
-  (cdr (cdr head)))
-
-(define (compile-jo jo)
-  (define (var? v)
-    (and (symbol? v)
-         (equal? ":" (substring (symbol->string v) 0 1))))
-  (define (call? v)
-    (and (symbol? v)
-         (not (eq? ":" (substring (symbol->string v) 0 1)))))
-  (define (apply? v)
-    (eq? v 'apply))
-  (define (arrow? v)
-    (and (list? v)
-         (eq? (car v) '->)))
-  (define (lambda? v)
-    (and (list? v)
-         (eq? (car v) 'lambda)))
-  (define (ex-bind? v)
-    (and (list? v) (pair? v)
-         (eq? (car v) ':)))
-  (cond [(var? jo)                (list 'var jo)]
-        [(call? jo)               (list 'call jo)]
-        [(apply? jo)              (list 'apply)]
-        [(arrow? jo)              (compile-arrow jo)]
-        [(lambda? jo)             (compile-lambda jo)]
-        [(ex-bind? jo)            (compile-ex-bind jo)]))
-
-(define (compile-ex-bind jo)
-  (list 'ex-bind
-        (compile-jo (cadr jo))
-        (compile-jojo (cddr jo))))
-
-(define (compile-jojo jojo)
-  (map compile-jo jojo))
-
-(define (compile-arrow a)
-  (match a
-    [{'-> ac sc}
-     {'arrow (compile-jojo ac) (compile-jojo sc)}]))
-
-(define compile-type compile-arrow)
-
-(define (compile-body body)
-  (map compile-arrow body))
-
-(define (compile-lambda lambda)
-  (list 'lambda
-        (compile-type (cadr lambda))
-        (compile-body (cddr lambda))))
-
-(define print-define-flag #f)
-(define (print-define+) (set! print-define-flag #t))
-(define (print-define-) (set! print-define-flag #f))
-
-(define type-check-flag #f)
-(define (type-check+) (set! type-check-flag #t))
-(define (type-check-) (set! type-check-flag #f))
-
-(define-macro (def head . tail)
-  `($def (quote ,head) (quote ,tail)))
-
-(define ($def head tail)
-  (define name (head->name head))
-  (define meaning
-    (list 'meaning-function
-          (compile-type (head->type head))
-          (compile-body tail)))
-  (push ns (cons name meaning))
-  (if type-check-flag
-    (match meaning
-      [{'meaning-function pt pb}
-       (let ([t pt]
-             [b pb])
-         (type-check/function t b))]))
-  (if print-define-flag
-    (let ()
-      (display "\n")
-      (display "<def>\n")
-      (display ":name: ") (display name) (display "\n")
-      (display ":meaning:\n")
-      (display meaning) (display "\n")
-      (display "</def>\n")
-      (display "\n"))))
-
-(define-macro (define-type head . tail)
-  `($define-type (quote ,head) (quote ,tail)))
-
-(define ($define-type head tail)
-  (define name (head->name head))
-  (define data-name-list (map car tail))
-  (define meaning
-    (list 'meaning-type-cons
-          (compile-type (head->type head))
-          name
-          data-name-list))
-  (push ns (cons name meaning))
-  (if print-define-flag
-    (let ()
-      (display "\n")
-      (display "<define-type>\n")
-      (display ":name: ") (display name) (display "\n")
-      (display ":meaning:\n")
-      (display meaning) (display "\n")
-      (display "</define-type>\n")
-      (display "\n")))
-  (map (lambda (h)
-         ($define-data h name))
-    tail)
-  (void))
-
-(define ($define-data head type-name)
-  (define name (head->name head))
-  (define meaning
-    (list 'meaning-data-cons
-          (compile-type (head->type head))
-          name
-          type-name))
-  (push ns (cons name meaning))
-  (if print-define-flag
-    (let ()
-      (display "\n")
-      (display "<define-data>\n")
-      (display ":name: ") (display name) (display "\n")
-      (display ":meaning:\n")
-      (display meaning) (display "\n")
-      (display "</define-data>\n")
-      (display "\n"))))
-
-(define id/counter 0)
-
-(define (id/new n ls)
-  (set! id/counter (+ 1 id/counter))
-  (vector (cons n id/counter) ls))
-
 (define (bs/commit)
   (define (recur bs0)
     (cond [(equal? '(commit-point) (car bs0))
@@ -577,15 +439,13 @@
        (if (not found)
          (orz 'compose/call ("unknow name : ~a~%" n))
          (match (cdr found)
-           [{'meaning-type-cons pt n nl}
+           [{'meaning-type pt n nl}
             (let ([len (type/input-number pt)])
               (push ds {'cons n (fetch ds len)}))]
-           [{'meaning-data-cons pt n n0}
+           [{'meaning-data pt n n0}
             (let ([len (type/input-number pt)])
               (push ds {'cons n (fetch ds len)}))]
-           [{'meaning-jojo pt pjj}
-            (push rs {0 compose rs/next pjj})]
-           [{'meaning-function pt pb}
+           [{'meaning-lambda pt pb}
             (compose/function pt pb)])))]))
 
 (define (compose/function t b)
@@ -690,13 +550,11 @@
        (if (not found)
          (orz 'cut/call ("unknow name : ~a~%" n))
          (match (cdr found)
-           [{'meaning-type-cons pt n nl}
+           [{'meaning-type pt n nl}
             (cut/type pt)]
-           [{'meaning-data-cons pt n n0}
+           [{'meaning-data pt n n0}
             (cut/type pt)]
-           [{'meaning-jojo pt pjj}
-            (cut/type pt)]
-           [{'meaning-function pt pb}
+           [{'meaning-lambda pt pb}
             (cut/type pt)])))]))
 
 (define (cut/type a)
@@ -750,31 +608,157 @@
       (set! ds ds-backup)
       new-ds)))
 
+(define print-define-flag #f)
+(define (print-define+) (set! print-define-flag #t))
+(define (print-define-) (set! print-define-flag #f))
+
+(define type-check-flag #f)
+(define (type-check+) (set! type-check-flag #t))
+(define (type-check-) (set! type-check-flag #f))
+
+(define-macro (def name body)
+  `($def (quote ,name) (quote ,body)))
+
+(define ($def name body)
+  (let ([key (car body)])
+    ((find-key key) name body)))
+
+(define key-record '())
+
+(define (new-key key fun)
+  (set! key-record
+        (cons (cons key fun)
+              key-record)))
+
+(define (find-key key)
+  (let ([found (assq key key-record)])
+    (if found
+      (cdr found)
+      (orz 'find-key
+        ("can not find key : ~a~%" key)))))
+
+(define (def-lambda n body)
+  (let* ([a (compile-arrow (cadr body))]
+         [al (compile-body (cddr body))]
+         [meaning (list 'meaning-lambda a al)])
+    (push ns (cons n meaning))
+    (if type-check-flag
+      (type-check/function a al))
+    (if print-define-flag
+      (let ()
+        (display "\n")
+        (display "<def-lambda>\n")
+        (display ":name: ") (display n) (display "\n")
+        (display ":meaning:\n")
+        (display meaning) (display "\n")
+        (display "</def-lambda>\n")
+        (display "\n")))))
+
+(new-key 'lambda def-lambda)
+
+(define (pair-even-list l)
+  (match l
+    [{} '()]
+    [{x} (orz 'pair-even-list
+           ("meet uneven list with ending : ~a~%" x))]
+    [(x y . z) (cons (cons x y)
+                     (pair-even-list z))]))
+
+(define (def-type n body)
+  (let* ([a (compile-arrow (cadr body))]
+         [pl (pair-even-list (cddr body))]
+         [nl (map car pl)]
+         [meaning (list 'meaning-type a n nl)])
+    (push ns (cons n meaning ))
+    (if print-define-flag
+      (let ()
+        (display "\n")
+        (display "<def-type>\n")
+        (display ":name: ") (display n) (display "\n")
+        (display ":meaning:\n")
+        (display meaning) (display "\n")
+        (display "</def-type>\n")
+        (display "\n")))
+    (for-each (lambda (p) (def-data n p))
+              pl)))
+
+(new-key 'type def-type)
+
+(define (def-data n0 p)
+  (let* ([n (car p)]
+         [a (compile-arrow (cdr p))]
+         [meaning (list 'meaning-data a n n0)])
+    (push ns (cons n meaning))
+    (if print-define-flag
+      (let ()
+        (display "\n")
+        (display "<def-data>\n")
+        (display ":name: ") (display n) (display "\n")
+        (display ":meaning:\n")
+        (display meaning) (display "\n")
+        (display "</def-data>\n")
+        (display "\n")))))
+
+(define (compile-jo jo)
+  (define (var? v)
+    (and (symbol? v)
+         (equal? ":" (substring (symbol->string v) 0 1))))
+  (define (call? v)
+    (and (symbol? v)
+         (not (eq? ":" (substring (symbol->string v) 0 1)))))
+  (define (apply? v)
+    (eq? v 'apply))
+  (define (arrow? v)
+    (and (list? v)
+         (pair? v)
+         (eq? (car v) '->)))
+  (define (lambda? v)
+    (and (list? v)
+         (pair? v)
+         (eq? (car v) 'lambda)))
+  (define (ex-bind? v)
+    (and (list? v)
+         (pair? v)
+         (eq? (car v) ':)))
+  (cond [(var? jo)                (list 'var jo)]
+        [(call? jo)               (list 'call jo)]
+        [(apply? jo)              (list 'apply)]
+        [(arrow? jo)              (compile-arrow jo)]
+        [(lambda? jo)             (compile-lambda jo)]
+        [(ex-bind? jo)            (compile-ex-bind jo)]))
+
+(define (compile-jojo jojo)
+  (map compile-jo jojo))
+
+(define (compile-ex-bind jo)
+  (list 'ex-bind
+        (compile-jo (cadr jo))
+        (compile-jojo (cddr jo))))
+
+(define (compile-arrow a)
+  (match a
+    [{'-> ac sc}
+     {'arrow (compile-jojo ac) (compile-jojo sc)}]))
+
+(define (compile-body b)
+  (map compile-arrow b))
+
+(define (compile-lambda l)
+  (list 'lambda
+        (compile-arrow (cadr l))
+        (compile-body (cddr l))))
+
+(define id/counter 0)
+
+(define (id/new n ls)
+  (set! id/counter (+ 1 id/counter))
+  (vector (cons n id/counter) ls))
+
 (define-macro (app s)
   `($app (quote ,s)))
 
 (define ($app s)
   (compose/jojo (compile/jojo s)))
-
-(define (type-check/jojo t jj)
-  (: type jojo -> bool)
-  (match t
-    [{'arrow tajj tsjj}
-     (let* ([dl1 (call-with-output-to-new-ds
-                  (lambda ()
-                    (push rs {0 compose rs/exit tajj})
-                    (rs/next)
-                    (push rs {0 cut rs/exit jj})
-                    (rs/next)))]
-            [dl2 (call-with-output-to-new-ds
-                  (lambda ()
-                    (push rs {0 compose rs/exit tsjj})
-                    (rs/next)))])
-       (push gs {0 unify gs/exit {dl1 dl2}})
-       (cond [(gs/exit)
-              #t]
-             [else (orz 'type-check/jojo
-                     ("cover fail~%"))]))]))
 
 (define (type-check/function t b)
   (: type body -> bool)

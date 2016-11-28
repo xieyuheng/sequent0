@@ -699,7 +699,10 @@
         (display "</def-data>\n")
         (display "\n")))))
 
-(define (compile-jo jo)
+(define (compile-arrow a)
+  (pass2-arrow (pass1-arrow a)))
+
+(define (pass1-jo jo)
   (define (var? v)
     (and (symbol? v)
          (eq? ': (symbol-car v))))
@@ -724,34 +727,49 @@
         [(ex-bind? jo)            (list 'ex-bind (symbol-cdr jo))]
         [(call? jo)               (list 'call jo)]
         [(apply? jo)              (list 'apply)]
-        [(arrow? jo)              (compile-arrow jo)]
-        [(lambda? jo)             (compile-lambda jo)]))
+        [(arrow? jo)              (pass1-arrow jo)]
+        [(lambda? jo)             (list 'lambda (map pass1-arrow (cdr l)))]))
 
-(define (compile-jojo jojo)
-  (map compile-jo jojo))
-
-(define (get-occur-list a)
-  (define (recur ol l)
-    (cond []
-          []))
+(define (pass1-arrow a)
   (match a
     [{'-> ac sc}
-     (recur '() (append as sc))]))
+     {'arrow (map pass1-jo ac) (map pass1-jo sc)}]))
 
-(define (new-local a)
-  (let* ([ol (get-occur-list a)]
-         [br '()])
-    (list ol br)))
+(define (pass2-jo jo)
+  (match jo
+    [{'arrow ac sc} (pass2-arrow jo)]
+    [{'lambda al} {'lambda (map pass2-arrow al)}]
+    [__ jo]))
 
-(define (compile-arrow a)
+(define (pass2-arrow a)
   (match a
-    [{'-> ac sc}
-     {'arrow (new-local a) (compile-jojo ac) (compile-jojo sc)}]))
+    [{'arrow ac sc}
+     {'arrow {(jojo->occur-list (append ac sc)) '()} ac sc}]))
 
-(define (compile-lambda l)
-  (list 'lambda
-        (compile-arrow (cadr l))
-        (map compile-arrow (cddr l))))
+(define (jojo->occur-list l)
+  (define (one ol n)
+    (if (member n ol)
+      ol
+      (cons n ol)))
+  (define (more ol jo)
+    (match jo
+      [{'var n}         (one ol n)]
+      [{'ex-bind n}     (one ol n)]
+      [{'call n}        ol]
+      [{'apply}         ol]
+      [{'arrow ac sc}   (loop ol (append ac sc))]
+      [{'lambda al}     (arrow-loop ol al)]))
+  (define (arrow-loop ol l)
+    (if (null? l)
+      ol
+      (match (car l)
+        [{'arrow ac sc}
+         (arrow-loop (loop ol (append ac sc)) (cdr l))])))
+  (define (loop ol l)
+    (if (null? l)
+      ol
+      (loop (more ol (car l)) (cdr l))))
+  (loop '() l))
 
 (define id/counter 0)
 

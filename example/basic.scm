@@ -30,17 +30,17 @@
      factorial)
 
 (def nat-induction
-  (lambda (-> [(: :p (-> [nat] [type]))
+  (lambda (-> [(-> [nat] [type]) %:p
                zero :p @
-               (-> [(: :k nat) :k :p @]
+               (-> [nat %:k :k :p @]
                    [:k succ :p @])
-               (: :x nat)]
-              [[:x :p @]])
-    (-> [:q :q/z :q/s zero] [:q/z])
-    (-> [:q :q/z :q/s :n succ]
+               nat %:x]
+              [:x :p @])
+    (-> [:p :p/z :p/s zero] [:p/z])
+    (-> [:p :p/z :p/s :n succ]
         [:n
-         :q :q/z :q/s :n nat-induction
-         :q/s @])))
+         :p :p/z :p/s :n nat-induction
+         :p/s @])))
 
 (def drop
   (lambda (-> [:t] [])

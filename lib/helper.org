@@ -167,34 +167,51 @@
 
 * sexp
 
-  #+begin_src scheme
-  (define (sexp->string s)
-    (format #f "~a" s))
-  #+end_src
+*** sexp->string
+
+    #+begin_src scheme
+    (define (sexp->string s)
+      (format #f "~a" s))
+    #+end_src
 
 * string
 
-  #+begin_src scheme
-  (define (find-char c s)
-    (: char string -> (or curser #f))
-    (find-char/curser c s 0))
+*** find-char
 
-  (define (find-char/curser c s curser)
-    (: char string curser -> (or curser #f))
-    (if (>= curser (string-length s))
-      #f
-      (let ([c0 (substring s curser (+ 1 curser))])
-        (if (equal? c c0)
-          curser
-          (find-char/curser c s (+ 1 curser))))))
-  #+end_src
+    #+begin_src scheme
+    (define (find-char c s)
+      (: char string -> (or curser #f))
+      (find-char/curser c s 0))
+
+    (define (find-char/curser c s curser)
+      (: char string curser -> (or curser #f))
+      (if (>= curser (string-length s))
+        #f
+        (let ([c0 (substring s curser (+ 1 curser))])
+          (if (equal? c c0)
+            curser
+            (find-char/curser c s (+ 1 curser))))))
+    #+end_src
 
 * symbol
 
-  #+begin_src scheme
-  (define (symbol-append . l)
-    (: symbol ... -> symbol)
-    (string->symbol
-     (apply string-append
-       (map symbol->string l))))
-  #+end_src
+*** symbol-append
+
+    #+begin_src scheme
+    (define (symbol-append . l)
+      (: symbol ... -> symbol)
+      (string->symbol
+       (apply string-append
+         (map symbol->string l))))
+    #+end_src
+
+*** symbol-car & symbol-cdr
+
+    #+begin_src scheme
+    (define (symbol-car v)
+      (string->symbol (substring (symbol->string v) 0 1)))
+
+    (define (symbol-cdr v)
+      (let ([str (symbol->string v)])
+        (string->symbol (substring str 1 (string-length str)))))
+    #+end_src

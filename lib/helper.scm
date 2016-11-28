@@ -138,3 +138,10 @@
   (string->symbol
    (apply string-append
      (map symbol->string l))))
+
+(define (symbol-car v)
+  (string->symbol (substring (symbol->string v) 0 1)))
+
+(define (symbol-cdr v)
+  (let ([str (symbol->string v)])
+    (string->symbol (substring str 1 (string-length str)))))

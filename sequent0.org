@@ -3,10 +3,11 @@
 
 * todo
 
-  - new 'arrow with a new field
+  - new arrow with a new field
     which have two new lists
     and new compose/var cut/var
     which use the rs to handle scope
+    which return uni-var to ds
 
 * note
 
@@ -25,6 +26,18 @@
     | compose | bs/deep | cover       |
     | cut     |         | unify       |
 
+*** syntax
+
+    #+begin_src scheme :tangle no
+    (type syntax
+      var                :var
+      ex-bind            %:var
+      name               name
+      arrow              (-> [syntax ...] [syntax ...])
+      lambda             (lambda type-arrow arrow ...)
+      apply              @)
+    #+end_src
+
 *** data & jo
 
     #+begin_src scheme :tangle no
@@ -36,7 +49,7 @@
       bind               var data
       trunk              type (vector trunky) index)
 
-    (type local          occur-list bind-list)
+    (type local          occur-list bind-record)
 
     (type trunky
       todo               body {data ...}
@@ -51,11 +64,11 @@
 
     (type jo
       var                name
+      ex-bind            name
       call               name
       arrow              ~
       lambda             ~
-      apply
-      ex-bind            jo   jojo)
+      apply)
     #+end_src
 
 *** meaning
@@ -665,9 +678,9 @@
     (define (compose/jo j)
       (case (car j)
         ['var           (compose/var j)]
+        ['ex-bind       (compose/ex-bind j)]
         ['call          (compose/call j)]
         ['apply         (compose/apply j)]
-        ['ex-bind       (compose/ex-bind j)]
         [__             (push ds j)]))
     #+end_src
 
@@ -792,7 +805,7 @@
               ("can not handle jo : ~a~%" j))]))
     #+end_src
 
-*** compose/ex-bind
+*** ><>< compose/ex-bind
 
     - here use {'ex-bind j vl}
       instead of {'ex-bind j jj}
@@ -839,11 +852,11 @@
     (define (cut/jo j)
       (case (car j)
         ['var           (cut/var j)]
+        ['ex-bind       (cut/ex-bind j)]
         ['call          (cut/call j)]
         ['apply         (cut/apply j)]
         ['arrow         (cut/arrow j)]
-        ['lambda        (cut/lambda j)]
-        ['ex-bind       (cut/ex-bind j)]))
+        ['lambda        (cut/lambda j)]))
     #+end_src
 
 *** cut/var
@@ -930,7 +943,7 @@
            ("for it is meaning less to write a lambda without local-vars~%"))]))
     #+end_src
 
-*** cut/ex-bind
+*** ><>< cut/ex-bind
 
     #+begin_src scheme
     (define (cut/ex-bind j)
@@ -999,7 +1012,7 @@
     #+begin_src scheme
     (define (def-lambda n body)
       (let* ([a (compile-arrow (cadr body))]
-             [al (compile-body (cddr body))]
+             [al (map compile-arrow (cddr body))]
              [meaning (list 'meaning-lambda a al)])
         (push ns (cons n meaning))
         (if type-check-flag
@@ -1074,10 +1087,10 @@
     (define (compile-jo jo)
       (define (var? v)
         (and (symbol? v)
-             (equal? ":" (substring (symbol->string v) 0 1))))
+             (eq? ': (symbol-car v))))
       (define (call? v)
         (and (symbol? v)
-             (not (eq? ":" (substring (symbol->string v) 0 1)))))
+             (not (eq? ': (symbol-car v)))))
       (define (apply? v)
         (eq? v 'apply))
       (define (arrow? v)
@@ -1089,15 +1102,15 @@
              (pair? v)
              (eq? (car v) 'lambda)))
       (define (ex-bind? v)
-        (and (list? v)
-             (pair? v)
-             (eq? (car v) ':)))
+        (and (symbol? v)
+             (eq? '% (symbol-car v))
+             (eq? ': (symbol-car (symbol-cdr v)))))
       (cond [(var? jo)                (list 'var jo)]
+            [(ex-bind? jo)            (list 'ex-bind (symbol-cdr jo))]
             [(call? jo)               (list 'call jo)]
             [(apply? jo)              (list 'apply)]
             [(arrow? jo)              (compile-arrow jo)]
-            [(lambda? jo)             (compile-lambda jo)]
-            [(ex-bind? jo)            (compile-ex-bind jo)]))
+            [(lambda? jo)             (compile-lambda jo)]))
     #+end_src
 
 *** compile-jojo
@@ -1107,13 +1120,25 @@
       (map compile-jo jojo))
     #+end_src
 
-*** compile-ex-bind
+*** ><>< get-occur-list
 
     #+begin_src scheme
-    (define (compile-ex-bind jo)
-      (list 'ex-bind
-            (compile-jo (cadr jo))
-            (compile-jojo (cddr jo))))
+    (define (get-occur-list a)
+      (define (recur ol l)
+        (cond []
+              []))
+      (match a
+        [{'-> ac sc}
+         (recur '() (append as sc))]))
+    #+end_src
+
+*** new-local
+
+    #+begin_src scheme
+    (define (new-local a)
+      (let* ([ol (get-occur-list a)]
+             [br '()])
+        (list ol br)))
     #+end_src
 
 *** compile-arrow
@@ -1122,14 +1147,7 @@
     (define (compile-arrow a)
       (match a
         [{'-> ac sc}
-         {'arrow (compile-jojo ac) (compile-jojo sc)}]))
-    #+end_src
-
-*** compile-body
-
-    #+begin_src scheme
-    (define (compile-body b)
-      (map compile-arrow b))
+         {'arrow (new-local a) (compile-jojo ac) (compile-jojo sc)}]))
     #+end_src
 
 *** compile-lambda
@@ -1138,7 +1156,7 @@
     (define (compile-lambda l)
       (list 'lambda
             (compile-arrow (cadr l))
-            (compile-body (cddr l))))
+            (map compile-arrow (cddr l))))
     #+end_src
 
 * >< id/new

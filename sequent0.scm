@@ -407,9 +407,9 @@
 (define (compose/jo j)
   (case (car j)
     ['var           (compose/var j)]
+    ['ex-bind       (compose/ex-bind j)]
     ['call          (compose/call j)]
     ['apply         (compose/apply j)]
-    ['ex-bind       (compose/ex-bind j)]
     [__             (push ds j)]))
 
 (define (compose/jojo jj) (for-each compose/jo jj))
@@ -526,11 +526,11 @@
 (define (cut/jo j)
   (case (car j)
     ['var           (cut/var j)]
+    ['ex-bind       (cut/ex-bind j)]
     ['call          (cut/call j)]
     ['apply         (cut/apply j)]
     ['arrow         (cut/arrow j)]
-    ['lambda        (cut/lambda j)]
-    ['ex-bind       (cut/ex-bind j)]))
+    ['lambda        (cut/lambda j)]))
 
 (define (cut/var j)
   ;; (if (var/fresh? j)
@@ -639,7 +639,7 @@
 
 (define (def-lambda n body)
   (let* ([a (compile-arrow (cadr body))]
-         [al (compile-body (cddr body))]
+         [al (map compile-arrow (cddr body))]
          [meaning (list 'meaning-lambda a al)])
     (push ns (cons n meaning))
     (if type-check-flag
@@ -702,10 +702,10 @@
 (define (compile-jo jo)
   (define (var? v)
     (and (symbol? v)
-         (equal? ":" (substring (symbol->string v) 0 1))))
+         (eq? ': (symbol-car v))))
   (define (call? v)
     (and (symbol? v)
-         (not (eq? ":" (substring (symbol->string v) 0 1)))))
+         (not (eq? ': (symbol-car v)))))
   (define (apply? v)
     (eq? v 'apply))
   (define (arrow? v)
@@ -717,36 +717,41 @@
          (pair? v)
          (eq? (car v) 'lambda)))
   (define (ex-bind? v)
-    (and (list? v)
-         (pair? v)
-         (eq? (car v) ':)))
+    (and (symbol? v)
+         (eq? '% (symbol-car v))
+         (eq? ': (symbol-car (symbol-cdr v)))))
   (cond [(var? jo)                (list 'var jo)]
+        [(ex-bind? jo)            (list 'ex-bind (symbol-cdr jo))]
         [(call? jo)               (list 'call jo)]
         [(apply? jo)              (list 'apply)]
         [(arrow? jo)              (compile-arrow jo)]
-        [(lambda? jo)             (compile-lambda jo)]
-        [(ex-bind? jo)            (compile-ex-bind jo)]))
+        [(lambda? jo)             (compile-lambda jo)]))
 
 (define (compile-jojo jojo)
   (map compile-jo jojo))
 
-(define (compile-ex-bind jo)
-  (list 'ex-bind
-        (compile-jo (cadr jo))
-        (compile-jojo (cddr jo))))
+(define (get-occur-list a)
+  (define (recur ol l)
+    (cond []
+          []))
+  (match a
+    [{'-> ac sc}
+     (recur '() (append as sc))]))
+
+(define (new-local a)
+  (let* ([ol (get-occur-list a)]
+         [br '()])
+    (list ol br)))
 
 (define (compile-arrow a)
   (match a
     [{'-> ac sc}
-     {'arrow (compile-jojo ac) (compile-jojo sc)}]))
-
-(define (compile-body b)
-  (map compile-arrow b))
+     {'arrow (new-local a) (compile-jojo ac) (compile-jojo sc)}]))
 
 (define (compile-lambda l)
   (list 'lambda
         (compile-arrow (cadr l))
-        (compile-body (cddr l))))
+        (map compile-arrow (cddr l))))
 
 (define id/counter 0)
 

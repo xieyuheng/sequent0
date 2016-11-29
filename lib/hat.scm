@@ -15,7 +15,7 @@
       o
       (loop (%-one o (car l))
             (cdr l))))
-  (loop object (pair-even-list rest)))
+  (loop object (apply pair-list rest)))
 
 (define (%-one object p)
   (let* ([field (car p)]
@@ -38,19 +38,19 @@
 ;;   (let ([])
 ;;     ))
 
-(define (new-object . rest)
-  (cons (cons 'method-record '())
-        (pair-even-list rest)))
-
-
+(define (new-object mpl vpl)
+  (cons (cons 'method-record mpl)
+        vpl))
 
 ;;;; test
 
 ;; (define o1
 ;;   (new-object
+;;    (pair-list)
+;;    (pair-list
 ;;     'a 1
 ;;     'b 2
-;;     'c 3))
+;;     'c 3)))
 
 ;; (% o1 'a 4)
 ;; (^ (% o1 'a 4) 'a)

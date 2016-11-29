@@ -219,6 +219,41 @@
                 (gs/next)
                 #f))])]))
 
+(define (cover)
+  (: -> bool)
+  (let* ([gsp (pop gs)]
+         [c   (^ gsp 'c)]
+         [ex  (^ gsp 'ex)]
+         [end (^ gsp 'end)]
+         [dl1 (^ gsp 'dl1)]
+         [dl2 (^ gsp 'dl2)])
+    (cond [(>= c (length dl1))
+           (end)
+           #t]
+          [else
+           (let ([d1 (list-ref dl1 c)]
+                 [d2 (list-ref dl2 c)])
+             (push gs (% gsp
+                         'c (+ 1 c)))
+             (if (cover/data/data d1 d2)
+               (gs/next)
+               #f))])))
+
+(define gsp-proto
+  (list
+   (cons 'c   '())
+   (cons 'ex  '())
+   (cons 'end '())
+   (cons 'dl1 '())
+   (cons 'dl2 '())))
+
+(@ 'copy gsp-proto
+   'c 0
+   'ex
+   'end
+   'dl1
+   'dl2 )
+
 (define (cover/data/data d1 d2)
   (: data data -> bool)
   ;; var -walk-> fresh-var
@@ -407,12 +442,10 @@
 (define (compose/jo j)
   (case (car j)
     ['var           (compose/var j)]
-    ['ex-bind       (compose/ex-bind j)]
+    ['bind          (compose/bind j)]
     ['call          (compose/call j)]
     ['apply         (compose/apply j)]
     [__             (push ds j)]))
-
-(define (compose/jojo jj) (for-each compose/jo jj))
 
 (define (compose/var j)
   ;; (if (var/fresh? j)
@@ -424,13 +457,13 @@
   (match t
     [{'arrow ajj sjj}
      (length (call-with-output-to-new-ds
-              (lambda () (compose/jojo ajj))))]))
+              (lambda () (for-each compose/jo ajj))))]))
 
 (define (type/output-number t)
   (match t
     [{'arrow ajj sjj}
      (length (call-with-output-to-new-ds
-              (lambda () (compose/jojo sjj))))]))
+              (lambda () (for-each compose/jo sjj))))]))
 
 (define (compose/call j)
   (match j
@@ -496,15 +529,15 @@
     [__ (orz 'compose/apply
           ("can not handle jo : ~a~%" j))]))
 
-(define (compose/ex-bind j)
+(define (compose/bind j)
   (match j
-    [{'ex-bind j vl}
+    [{'bind j vl}
      (let* ([dl (call-with-output-to-new-ds
                  (lambda ()
                    (compose/jo j)))]
             [d (car dl)])
        (if (not (eq? (length dl) 1))
-         (orz 'compose/ex-bind
+         (orz 'compose/bind
            ("jo should return one data~%")
            ("but this jo does not : ~a~%" j))
          (for-each (lambda (v)
@@ -526,7 +559,7 @@
 (define (cut/jo j)
   (case (car j)
     ['var           (cut/var j)]
-    ['ex-bind       (cut/ex-bind j)]
+    ['bind          (cut/bind j)]
     ['call          (cut/call j)]
     ['apply         (cut/apply j)]
     ['arrow         (cut/arrow j)]
@@ -569,7 +602,7 @@
        (push bs '(commit-point))
        (push gs {0 unify bs/commit {dl1 dl2}})
        (if (gs/next)
-         (compose/jojo sjj)
+         (for-each compose/jo sjj)
          (orz 'cut/type
            ("fail on unify~%"))))]))
 
@@ -594,9 +627,9 @@
        ("can not handle jo : ~a~%" j)
        ("for it is meaning less to write a lambda without local-vars~%"))]))
 
-(define (cut/ex-bind j)
-  (orz 'cut/ex-bind
-    ("can not handle ex-bind as jo that is not in type~%")
+(define (cut/bind j)
+  (orz 'cut/bind
+    ("can not handle bind as jo that is not in type~%")
     ("jo : ~a~%" j)))
 
 (define (call-with-output-to-new-ds f)
@@ -656,17 +689,9 @@
 
 (new-key 'lambda def-lambda)
 
-(define (pair-even-list l)
-  (match l
-    [{} '()]
-    [{x} (orz 'pair-even-list
-           ("meet uneven list with ending : ~a~%" x))]
-    [(x y . z) (cons (cons x y)
-                     (pair-even-list z))]))
-
 (define (def-type n body)
   (let* ([a (compile-arrow (cadr body))]
-         [pl (pair-even-list (cddr body))]
+         [pl (apply pair-list (cddr body))]
          [nl (map car pl)]
          [meaning (list 'meaning-type a n nl)])
     (push ns (cons n meaning ))
@@ -719,12 +744,12 @@
     (and (list? v)
          (pair? v)
          (eq? (car v) 'lambda)))
-  (define (ex-bind? v)
+  (define (bind? v)
     (and (symbol? v)
          (eq? '% (symbol-car v))
          (eq? ': (symbol-car (symbol-cdr v)))))
   (cond [(var? jo)                (list 'var jo)]
-        [(ex-bind? jo)            (list 'ex-bind (symbol-cdr jo))]
+        [(bind? jo)               (list 'bind (symbol-cdr jo))]
         [(call? jo)               (list 'call jo)]
         [(apply? jo)              (list 'apply)]
         [(arrow? jo)              (pass1-arrow jo)]
@@ -754,7 +779,7 @@
   (define (more ol jo)
     (match jo
       [{'var n}         (one ol n)]
-      [{'ex-bind n}     (one ol n)]
+      [{'bind n}        (one ol n)]
       [{'call n}        ol]
       [{'apply}         ol]
       [{'arrow ac sc}   (loop ol (append ac sc))]
@@ -781,7 +806,7 @@
   `($app (quote ,s)))
 
 (define ($app s)
-  (compose/jojo (compile/jojo s)))
+  (for-each compose/jo (compile/jojo s)))
 
 (define (type-check/function t b)
   (: type body -> bool)

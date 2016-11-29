@@ -1075,7 +1075,7 @@
     #+begin_src scheme
     (define (def-type n body)
       (let* ([a (compile-arrow (cadr body))]
-             [pl (pair-even-list (cddr body))]
+             [pl (apply pair-list (cddr body))]
              [nl (map car pl)]
              [meaning (list 'meaning-type a n nl)])
         (push ns (cons n meaning ))

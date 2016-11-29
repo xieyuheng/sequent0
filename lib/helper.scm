@@ -117,13 +117,13 @@
         [else
          (cons (car l1) (list-sub (cdr l1) l2))]))
 
-(define (pair-even-list l)
+(define (pair-list . l)
   (match l
     [{} '()]
-    [{x} (orz 'pair-even-list
+    [{x} (orz 'pair-list
            ("meet uneven list with ending : ~a~%" x))]
     [(x y . z) (cons (cons x y)
-                     (pair-even-list z))]))
+                     (apply pair-list z))]))
 
 (define (sexp->string s)
   (format #f "~a" s))

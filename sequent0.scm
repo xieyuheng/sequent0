@@ -710,7 +710,7 @@
     (and (symbol? v)
          (not (eq? ': (symbol-car v)))))
   (define (apply? v)
-    (eq? v 'apply))
+    (eq? v '@))
   (define (arrow? v)
     (and (list? v)
          (pair? v)

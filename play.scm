@@ -6,6 +6,7 @@
 (include "lib/flower-barcket.scm")
 (include "lib/match.scm")
 (include "lib/helper.scm")
+(include "lib/hat.scm")
 (include "sequent0.scm")
 (print-define+)
 

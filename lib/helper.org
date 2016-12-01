@@ -23,6 +23,19 @@
        (error who (cating ("~%") c ...))]))
   #+end_src
 
+* if3
+
+  #+begin_src scheme
+  (define-syntax if3
+    (syntax-rules ()
+      [(if3 [a ...]
+            [b ...]
+            [c ...])
+       (if (let () a ...)
+         (let () b ...)
+         (let () c ...))]))
+  #+end_src
+
 * type & :
 
   #+begin_src scheme

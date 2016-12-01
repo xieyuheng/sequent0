@@ -32,11 +32,12 @@
 
     #+begin_src scheme
     (: syntax
-       var                :var
-       bind               %:var
-       name               name
+       var                :name
+       fvar               ::name
+       bind               %:name
+       call               name
        arrow              (-> [syntax ...] [syntax ...])
-       lambda             (lambda type-arrow arrow ...)
+       lambda             (lambda arrow arrow ...)
        apply              @)
     #+end_src
 
@@ -82,7 +83,6 @@
        meaning-lambda     arrow {arrow ...})
     #+end_src
 
-
 * stack
 
 *** stack
@@ -114,32 +114,47 @@
 *** stack point
 
     #+begin_src scheme
+    ;; name-stack
     (: ns {(name . meaning) ...})
+
+    ;; data-stack
     (: ds {data ...})
+
+    ;; binding-stack
     (: bs {(id . ls) ...})
 
+    ;; return-stack
+    (define (rs/exit) (void))
+    (define (rs/next)
+      (match (tos rs)
+        [{c ex end jj}
+         (ex)]))
     (define rsp-proto
       (new-struct
        (pair-list
-        'c      '() ;; counter
-        'ex     '() ;; explainer
-        'end    '() ;; ender
-        'unirc  '() ;; uni-record
-        'jj     '() ;; jojo
-        )))
-    (: unirc {(var . uni-var) ...})
+        'c      0
+        'ex     '(explainer)
+        'end    rs/exit
+        'vrc    '(var record)
+        'jj     '(jojo))))
 
+    ;; goal-stack
+    ;;   binding-stack is to record solution of equations in goal-stack
+    (define (gs/exit) (void))
+    (define (gs/next)
+      (: -> bool)
+      (match (tos gs)
+        [{c ex end {dl1 dl2}}
+         (ex)]))
     (define gsp-proto
       (new-struct
        (pair-list
-        'c      '() ;; counter
-        'ex     '() ;; explainer
-        'end    '() ;; ender
-        'dl+    '() ;; data-list
-        'dl-    '() ;; data-list
-        )))
+        'c      0
+        'ex     '(explainer)
+        'end    gs/exit
+        'dl+    '(data-list)
+        'dl-    '(data-list))))
     #+end_src
-
 
 * bs
 
@@ -312,6 +327,21 @@
               (eq? level1 level2))]))
     #+end_src
 
+* ds
+
+*** call-with-output-to-new-ds
+
+    #+begin_src scheme
+    (define (call-with-output-to-new-ds f)
+      (: function -> new-ds)
+      (let ([ds-backup ds])
+        (set! ds '())
+        (f)
+        (let ([new-ds ds])
+          (set! ds ds-backup)
+          new-ds)))
+    #+end_src
+
 * occur-check
 
 *** occur-check/data
@@ -350,28 +380,6 @@
          (match (vector-ref k 0)
            [{'todo b dl} (occur-check/data-list dl)]
            [{'done dl}   (occur-check/data-list dl)])]))
-    #+end_src
-
-* gs
-
-*** note goal-stack
-
-    - binding-stack is to record solution of equations in goal-stack
-
-*** gs/exit
-
-    #+begin_src scheme
-    (define (gs/exit) (void))
-    #+end_src
-
-*** gs/next
-
-    #+begin_src scheme
-    (define (gs/next)
-      (: -> bool)
-      (match (tos gs)
-        [{c ex end {dl1 dl2}}
-         (ex)]))
     #+end_src
 
 * trunk
@@ -444,20 +452,20 @@
                    (gs/next)
                    #f))])))
 
-    (define gsp-proto
-      (list
-       (cons 'c   '())
-       (cons 'ex  '())
-       (cons 'end '())
-       (cons 'dl1 '())
-       (cons 'dl2 '())))
+    ;; (define gsp-proto
+    ;;   (list
+    ;;    (cons 'c   '())
+    ;;    (cons 'ex  '())
+    ;;    (cons 'end '())
+    ;;    (cons 'dl1 '())
+    ;;    (cons 'dl2 '())))
 
-    (@ 'copy gsp-proto
-       'c 0
-       'ex
-       'end
-       'dl1
-       'dl2 )
+    ;; (@ 'copy gsp-proto
+    ;;    'c 0
+    ;;    'ex
+    ;;    'end
+    ;;    'dl1
+    ;;    'dl2)
     #+end_src
 
 *** cover/data/data
@@ -693,24 +701,6 @@
                             (push gs {0 unify gs/exit {dl1 dl2}})
                             (gs/next)]
                            [else #f])])])])))
-    #+end_src
-
-
-* rs
-
-*** rs/exit
-
-    #+begin_src scheme
-    (define (rs/exit) (void))
-    #+end_src
-
-*** rs/next
-
-    #+begin_src scheme
-    (define (rs/next)
-      (match (tos rs)
-        [{c ex end jj}
-         (ex)]))
     #+end_src
 
 * compose
@@ -1004,22 +994,6 @@
         ("jo : ~a~%" j)))
     #+end_src
 
-* ds
-
-*** call-with-output-to-new-ds
-
-    #+begin_src scheme
-    (define (call-with-output-to-new-ds f)
-      (: function -> new-ds)
-      (let ([ds-backup ds])
-        (set! ds '())
-        (f)
-        (let ([new-ds ds])
-          (set! ds ds-backup)
-          new-ds)))
-    #+end_src
-
-
 * def
 
 *** note
@@ -1073,7 +1047,7 @@
              [meaning (list 'meaning-lambda a al)])
         (push ns (cons n meaning))
         (if type-check-flag
-          (type-check/function a al))
+          (type-check a al))
         (if print-define-flag
           (let ()
             (display "\n")
@@ -1149,12 +1123,22 @@
     (define (pass1-jo jo)
       (define (var? v)
         (and (symbol? v)
-             (eq? ': (symbol-car v))))
-      (define (call? v)
+             (eq? ': (symbol-car v))
+             (not (eq? ': (symbol-car (symbol-cdr v))))))
+      (define (fvar? v)
         (and (symbol? v)
-             (not (eq? ': (symbol-car v)))))
+             (eq? ': (symbol-car v))
+             (eq? ': (symbol-car (symbol-cdr v)))))
+      (define (bind? v)
+        (and (symbol? v)
+             (eq? '% (symbol-car v))
+             (eq? ': (symbol-car (symbol-cdr v)))))
       (define (apply? v)
         (eq? v '@))
+      (define (call? v)
+        (and (symbol? v)
+             (not (eq? ': (symbol-car v)))
+             (not (eq? '% (symbol-car v)))))
       (define (arrow? v)
         (and (list? v)
              (pair? v)
@@ -1163,14 +1147,11 @@
         (and (list? v)
              (pair? v)
              (eq? (car v) 'lambda)))
-      (define (bind? v)
-        (and (symbol? v)
-             (eq? '% (symbol-car v))
-             (eq? ': (symbol-car (symbol-cdr v)))))
       (cond [(var? jo)                (list 'var jo)]
+            [(fvar? jo)               (list 'fvar (symbol-cdr jo))]
             [(bind? jo)               (list 'bind (symbol-cdr jo))]
-            [(call? jo)               (list 'call jo)]
             [(apply? jo)              (list 'apply)]
+            [(call? jo)               (list 'call jo)]
             [(arrow? jo)              (pass1-arrow jo)]
             [(lambda? jo)             (list 'lambda (map pass1-arrow (cdr l)))]))
     #+end_src
@@ -1200,255 +1181,176 @@
     (define (pass2-arrow a)
       (match a
         [{'arrow ac sc}
-         {'arrow {(jojo->occur-list (append ac sc)) '()} ac sc}]))
+         {'arrow (jojo->var-list (append ac sc))
+                 (jojo->fvar-list (append ac sc))
+                 ac sc}]))
     #+end_src
 
-*** jojo->occur-list
+*** jojo->var-list
 
     #+begin_src scheme
-    (define (jojo->occur-list l)
-      (define (one ol n)
-        (if (member n ol)
-          ol
-          (cons n ol)))
-      (define (more ol jo)
+    (define (jojo->var-list l)
+      (define (one vl n)
+        (if (member n vl)
+          vl
+          (cons n vl)))
+      (define (more vl jo)
         (match jo
-          [{'var n}         (one ol n)]
-          [{'bind n}        (one ol n)]
-          [{'call n}        ol]
-          [{'apply}         ol]
-          [{'arrow ac sc}   (loop ol (append ac sc))]
-          [{'lambda al}     (arrow-loop ol al)]))
-      (define (arrow-loop ol l)
+          [{'var n}         (one vl n)]
+          [{'fvar n}        vl]
+          [{'bind n}        (one vl n)]
+          [{'call n}        vl]
+          [{'apply}         vl]
+          [{'arrow ac sc}   (loop vl (append ac sc))]
+          [{'lambda al}     (arrow-loop vl al)]))
+      (define (arrow-loop vl l)
         (if (null? l)
-          ol
+          vl
           (match (car l)
             [{'arrow ac sc}
-             (arrow-loop (loop ol (append ac sc)) (cdr l))])))
-      (define (loop ol l)
+             (arrow-loop (loop vl (append ac sc)) (cdr l))])))
+      (define (loop vl l)
         (if (null? l)
-          ol
-          (loop (more ol (car l)) (cdr l))))
+          vl
+          (loop (more vl (car l)) (cdr l))))
       (loop '() l))
     #+end_src
 
-* >< id/new
+*** jojo->fvar-list
+
+    #+begin_src scheme
+    (define (jojo->fvar-list l)
+      (define (one vl n)
+        (if (member n vl)
+          vl
+          (cons n vl)))
+      (define (more vl jo)
+        (match jo
+          [{'var n}         vl]
+          [{'fvar n}        (one vl n)]
+          [{'bind n}        vl]
+          [{'call n}        vl]
+          [{'apply}         vl]
+          [{'arrow ac sc}   (loop vl (append ac sc))]
+          [{'lambda al}     (arrow-loop vl al)]))
+      (define (arrow-loop vl l)
+        (if (null? l)
+          vl
+          (match (car l)
+            [{'arrow ac sc}
+             (arrow-loop (loop vl (append ac sc)) (cdr l))])))
+      (define (loop vl l)
+        (if (null? l)
+          vl
+          (loop (more vl (car l)) (cdr l))))
+      (loop '() l))
+    #+end_src
+
+* run
 
   #+begin_src scheme
-  (define id/counter 0)
+  (define-macro (run s)
+    `($run (quote ,s)))
 
-  (define (id/new n ls)
-    (set! id/counter (+ 1 id/counter))
-    (vector (cons n id/counter) ls))
+  (define ($run s)
+    (for-each compose/jo (compile/jojo s)))
   #+end_src
 
-* top-level
+* uni-var
 
-*** app
-
-    #+begin_src scheme
-    (define-macro (app s)
-      `($app (quote ,s)))
-
-    (define ($app s)
-      (for-each compose/jo (compile/jojo s)))
-    #+end_src
-
-*** note type-check/function without bind-unify
-
-    - body [for all arrow]
-      #+begin_src scheme :tangle no
-      (push rs {compose <type-antecedent>})
-      <point>
-      (push rs {cut <antecedent>})
-      <ds/gather>
-      (push gs {unify <gathered>})
-
-      (push rs {compose <type-succedent>})
-      <point>
-      (push rs {cut <succedent>})
-      <ds/gather>
-      (push gs {cover <gathered>})
-      <undo-when-success>
-      #+end_src
-
-*** note type-check/function
-
-    - body [for all arrow]
-      #+begin_src scheme :tangle no
-      (push rs {compose <type-antecedent>})
-      <point>
-      (push rs {compose <antecedent>})
-      <ds/gather>
-      (push gs {bind-unify <gathered>})
-
-      <undo>
-      (push rs {cut <antecedent>})
-      <ds/gather>
-      (push gs {unify <gathered>})
-
-      (push rs {compose <type-succedent>})
-      <point>
-      (push rs {cut <succedent>})
-      <ds/gather>
-      (push gs {cover <gathered>})
-      <undo-when-success>
-      #+end_src
-
-*** type-check/function
-
-    - ><><>< in lack of bind-unify
+*** id/new
 
     #+begin_src scheme
-    (define (type-check/function t b)
-      (: type body -> bool)
-      (match t
-        [{'arrow tajj tsjj}
-         (for-each (lambda (a) (type-check/arrow t a))
-                   b)]
-        [__ (orz 'type-check/function
-              ("type of function must be arrow~%")
-              ("type : ~a~%" t))]))
+    (define id/counter 0)
 
-    (define (type-check/arrow ta a)
-      (: type-arrow arrow -> bool)
-      (match {ta a}
-        [{{'arrow tajj tsjj} {'arrow ajj sjj}}
-         (let* ([dl1 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs {0 compose rs/exit tajj})
-                        (rs/next)))]
-                [dl2 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs {0 cut rs/exit ajj})
-                        (rs/next)))])
-           (push gs {0 unify gs/exit {dl1 dl2}})
-           (cond [(gs/next)
-                  (let* ([dl3 (call-with-output-to-new-ds
-                               (lambda ()
-                                 (push rs {0 compose rs/exit tsjj})
-                                 (rs/next)))]
-                         [dl4 (call-with-output-to-new-ds
-                               (lambda ()
-                                 (push rs {0 cut rs/exit sjj})
-                                 (rs/next)))])
-                    (push gs {0 cover gs/exit {dl3 dl4}})
-                    (cond [(gs/exit)
-                           #t]
-                          [else (orz 'type-check/arrow
-                                  ("cover fail~%"))]))]
-                 [else (orz 'type-check/arrow
-                         ("unify fail~%"))]))]))
+    ;; (define (id/new n ls)
+    ;;   (set! id/counter (+ 1 id/counter))
+    ;;   (vector (cons n id/counter) ls))
+
+    (define (id/new n)
+      (set! id/counter (+ 1 id/counter))
+      (vector (cons n id/counter) '()))
     #+end_src
 
-*** [new] type-check/function
-
-    - ><><>< in lack of bind-unify
+*** vl->vrc
 
     #+begin_src scheme
-    (define (type-check/function t b)
-      (: type body -> bool)
-      (match t
-        [{'arrow tajj tsjj}
-         (for-each (lambda (a) (type-check/arrow t a))
-                   b)]
-        [__ (orz 'type-check/function
-              ("type of function must be arrow~%")
-              ("type : ~a~%" t))]))
-
-    (define (type-check/arrow ta a)
-      (: type-arrow arrow -> bool)
-      (match {ta a}
-        [{{'arrow tajj tsjj} {'arrow ajj sjj}}
-         (let* ([dl1 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs {0 compose rs/exit tajj})
-                        (rs/next)))]
-                [dl2 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs {0 cut rs/exit ajj})
-                        (rs/next)))])
-           (push gs {0 unify gs/exit {dl1 dl2}})
-           (cond [(gs/next)
-                  (let* ([dl3 (call-with-output-to-new-ds
-                               (lambda ()
-                                 (push rs {0 compose rs/exit tsjj})
-                                 (rs/next)))]
-                         [dl4 (call-with-output-to-new-ds
-                               (lambda ()
-                                 (push rs {0 cut rs/exit sjj})
-                                 (rs/next)))])
-                    (push gs {0 cover gs/exit {dl3 dl4}})
-                    (cond [(gs/exit)
-                           #t]
-                          [else (orz 'type-check/arrow
-                                  ("cover fail~%"))]))]
-                 [else (orz 'type-check/arrow
-                         ("unify fail~%"))]))]))
-
-    (define (type-check/arrow ta a)
-      (: type-arrow arrow -> bool)
-      (match {ta a}
-        [{{'arrow tlo tajj tsjj} {'arrow lo ajj sjj}}
-         (let* ([dl1 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs (new-struct
-                                  (pair-list
-                                   'c      0
-                                   'ex     cut
-                                   'end    rs/exit
-                                   'unirc  ><><><
-                                   'jj     tajj)))
-                        (rs/next)))]
-                [dl2 (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs (new-struct
-                                  (pair-list
-                                   'c      0
-                                   'ex     cut
-                                   'end    rs/exit
-                                   'unirc  ><><><
-                                   'jj     ajj)))
-                        (rs/next)))])
-           (push gs (new-struct
-                     (pair-list
-                      'c      0
-                      'ex     unify
-                      'end    gs/exit
-                      'dl+    dl1
-                      'dl-    dl2)))
-           (cond [(gs/next)
-                  (let* ([dl3 (call-with-output-to-new-ds
-                               (lambda ()
-                                 (push rs (new-struct
-                                           (pair-list
-                                            'c      0
-                                            'ex     cut
-                                            'end    rs/exit
-                                            'unirc  ><><><
-                                            'jj     tsjj)))
-                                 (rs/next)))]
-                         [dl4 (call-with-output-to-new-ds
-                               (lambda ()
-                                 (push rs (new-struct
-                                           (pair-list
-                                            'c      0
-                                            'ex     cut
-                                            'end    rs/exit
-                                            'unirc  ><><><
-                                            'jj     sjj)))
-                                 (rs/next)))])
-                    (push gs (new-struct
-                              (pair-list
-                               'c      0
-                               'ex     cover
-                               'end    gs/exit
-                               'dl+    dl3
-                               'dl-    dl4)))
-                    (cond [(gs/exit)
-                           #t]
-                          [else (orz 'type-check/arrow
-                                  ("cover fail~%"))]))]
-                 [else (orz 'type-check/arrow
-                         ("unify fail~%"))]))]))
+    (define (vl->vrc vl)
+      (map (lambda (v)
+             (match v
+               [{'var n}
+                {'uni-var (id/new n) 0}]))
+        vl))
     #+end_src
+
+* ><><>< type-check
+
+  #+begin_src scheme
+  (define (type-check ta al)
+    (: arrow {arrow ...} -> bool)
+    (match ta
+      [('arrow . __)
+       (for-each (lambda (a) (type-check/arrow ta a))
+                 al)]
+      [__ (orz 'type-check
+            ("type of function must be arrow~%")
+            ("type : ~a~%" ta))]))
+
+  (define (type-check/arrow ta a)
+    (: type-arrow arrow -> bool)
+    (match {ta a}
+      [{{'arrow tvl tfvl tajj tsjj}
+        {'arrow vl fvl ajj sjj}}
+       (let* ([tvrc (vl->vrc tvl)]
+              [vrc (vl->vrc vl)]
+              [dl-tajj (call-with-output-to-new-ds
+                        (lambda ()
+                          (push rs (% rsp-proto
+                                      'ex  compose
+                                      'vrc tvrc
+                                      'jj  tajj))
+                          (rs/next)))]
+              [dl-ajj (call-with-output-to-new-ds
+                       (lambda ()
+                         (push rs (% rsp-proto
+                                     'ex  cut
+                                     'vrc vrc
+                                     'jj  ajj))
+                         (rs/next)))]
+              [dl-tsjj (call-with-output-to-new-ds
+                        (lambda ()
+                          (push rs (% rsp-proto
+                                      'ex  compose
+                                      'vrc tvrc
+                                      'jj  tsjj))
+                          (rs/next)))]
+              [dl-sjj (call-with-output-to-new-ds
+                       (lambda ()
+                         (push rs (% rsp-proto
+                                     'ex  cut
+                                     'vrc vrc
+                                     'jj  sjj))
+                         (rs/next)))])
+         (: ><><><
+            in lack of bind-unify
+            (push rs {compose <type-antecedent>})
+            (push rs {compose <antecedent>})
+            (push gs {bind-unify <gathered>}))
+         (if3 [(push gs (% gsp-proto
+                           'ex     unify
+                           'dl+    dl-tajj
+                           'dl-    dl-ajj))
+               (gs/next)]
+              [(if3 [(push gs (% gsp-proto
+                                 'ex     cover
+                                 'dl+    dl-tsjj
+                                 'dl-    dl-sjj))
+                     (gs/next)]
+                    [(: ><><><
+                        in lack of undo on success)
+                     #t]
+                    [(orz 'type-check/arrow
+                       ("cover fail~%"))])]
+              [(orz 'type-check/arrow
+                 ("unify fail~%"))]))]))
+  #+end_src

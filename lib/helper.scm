@@ -17,6 +17,15 @@
     [(orz who c ...)
      (error who (cating ("~%") c ...))]))
 
+(define-syntax if3
+  (syntax-rules ()
+    [(if3 [a ...]
+          [b ...]
+          [c ...])
+     (if (let () a ...)
+       (let () b ...)
+       (let () c ...))]))
+
 (define-syntax type
   (syntax-rules ()
     [(type . body)

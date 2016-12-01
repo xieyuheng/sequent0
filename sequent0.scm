@@ -1,3 +1,37 @@
+(: syntax
+   var                :name
+   fvar               ::name
+   bind               %:name
+   call               name
+   arrow              (-> [syntax ...] [syntax ...])
+   lambda             (lambda arrow arrow ...)
+   apply              @)
+
+(: jo
+   var                name
+   bind               name
+   call               name
+   arrow              {var ...} {fvar ...} {jo ...} {jo ...}
+   lambda             arrow {arrow ...}
+   apply)
+
+(: data
+   uni-var            id level
+   uni-bind           uni-var data
+   cons               name {data ...}
+   uni-arrow          {var ...} {(fvar . uni-var) ...} {jo ...} {jo ...}
+   uni-lambda         uni-arrow {uni-arrow ...}
+   trunk              uni-arrow (vector trunky) index)
+
+(: id                 (vector (name . counter) ls))
+(: ls                 {(level . data) ...})
+;; vector thus unique
+;; ls (level binding-list) in id for commit
+
+(: trunky
+   todo               {uni-arrow ...} {data ...}
+   done               {data ...})
+
 (define ns '())
 (define ds '())
 (define bs '())
@@ -19,6 +53,31 @@
     `(let ([,v (take ,s ,n)])
        (set! ,s (drop ,s ,n))
        ,v)))
+
+(: ns {(name . meaning) ...})
+(: ds {data ...})
+(: bs {(id . ls) ...})
+
+(define rsp-proto
+  (new-struct
+   (pair-list
+    'c      '() ;; counter
+    'ex     '() ;; explainer
+    'end    '() ;; ender
+    'unirc  '() ;; uni-record
+    'jj     '() ;; jojo
+    )))
+(: unirc {(var . uni-var) ...})
+
+(define gsp-proto
+  (new-struct
+   (pair-list
+    'c      '() ;; counter
+    'ex     '() ;; explainer
+    'end    '() ;; ender
+    'dl+    '() ;; data-list
+    'dl-    '() ;; data-list
+    )))
 
 (define (bs/commit)
   (define (recur bs0)
@@ -239,20 +298,20 @@
                (gs/next)
                #f))])))
 
-(define gsp-proto
-  (list
-   (cons 'c   '())
-   (cons 'ex  '())
-   (cons 'end '())
-   (cons 'dl1 '())
-   (cons 'dl2 '())))
+;; (define gsp-proto
+;;   (list
+;;    (cons 'c   '())
+;;    (cons 'ex  '())
+;;    (cons 'end '())
+;;    (cons 'dl1 '())
+;;    (cons 'dl2 '())))
 
-(@ 'copy gsp-proto
-   'c 0
-   'ex
-   'end
-   'dl1
-   'dl2 )
+;; (@ 'copy gsp-proto
+;;    'c 0
+;;    'ex
+;;    'end
+;;    'dl1
+;;    'dl2)
 
 (define (cover/data/data d1 d2)
   (: data data -> bool)
@@ -730,12 +789,22 @@
 (define (pass1-jo jo)
   (define (var? v)
     (and (symbol? v)
-         (eq? ': (symbol-car v))))
-  (define (call? v)
+         (eq? ': (symbol-car v))
+         (not (eq? ': (symbol-car (symbol-cdr v))))))
+  (define (fvar? v)
     (and (symbol? v)
-         (not (eq? ': (symbol-car v)))))
+         (eq? ': (symbol-car v))
+         (eq? ': (symbol-car (symbol-cdr v)))))
+  (define (bind? v)
+    (and (symbol? v)
+         (eq? '% (symbol-car v))
+         (eq? ': (symbol-car (symbol-cdr v)))))
   (define (apply? v)
     (eq? v '@))
+  (define (call? v)
+    (and (symbol? v)
+         (not (eq? ': (symbol-car v)))
+         (not (eq? '% (symbol-car v)))))
   (define (arrow? v)
     (and (list? v)
          (pair? v)
@@ -744,14 +813,11 @@
     (and (list? v)
          (pair? v)
          (eq? (car v) 'lambda)))
-  (define (bind? v)
-    (and (symbol? v)
-         (eq? '% (symbol-car v))
-         (eq? ': (symbol-car (symbol-cdr v)))))
   (cond [(var? jo)                (list 'var jo)]
+        [(fvar? jo)               (list 'fvar jo)]
         [(bind? jo)               (list 'bind (symbol-cdr jo))]
-        [(call? jo)               (list 'call jo)]
         [(apply? jo)              (list 'apply)]
+        [(call? jo)               (list 'call jo)]
         [(arrow? jo)              (pass1-arrow jo)]
         [(lambda? jo)             (list 'lambda (map pass1-arrow (cdr l)))]))
 
@@ -769,31 +835,60 @@
 (define (pass2-arrow a)
   (match a
     [{'arrow ac sc}
-     {'arrow {(jojo->occur-list (append ac sc)) '()} ac sc}]))
+     {'arrow (jojo->var-list (append ac sc))
+             (jojo->fvar-list (append ac sc))
+             ac sc}]))
 
-(define (jojo->occur-list l)
-  (define (one ol n)
-    (if (member n ol)
-      ol
-      (cons n ol)))
-  (define (more ol jo)
+(define (jojo->var-list l)
+  (define (one vl n)
+    (if (member n vl)
+      vl
+      (cons n vl)))
+  (define (more vl jo)
     (match jo
-      [{'var n}         (one ol n)]
-      [{'bind n}        (one ol n)]
-      [{'call n}        ol]
-      [{'apply}         ol]
-      [{'arrow ac sc}   (loop ol (append ac sc))]
-      [{'lambda al}     (arrow-loop ol al)]))
-  (define (arrow-loop ol l)
+      [{'var n}         (one vl n)]
+      [{'fvar n}        vl]
+      [{'bind n}        (one vl n)]
+      [{'call n}        vl]
+      [{'apply}         vl]
+      [{'arrow ac sc}   (loop vl (append ac sc))]
+      [{'lambda al}     (arrow-loop vl al)]))
+  (define (arrow-loop vl l)
     (if (null? l)
-      ol
+      vl
       (match (car l)
         [{'arrow ac sc}
-         (arrow-loop (loop ol (append ac sc)) (cdr l))])))
-  (define (loop ol l)
+         (arrow-loop (loop vl (append ac sc)) (cdr l))])))
+  (define (loop vl l)
     (if (null? l)
-      ol
-      (loop (more ol (car l)) (cdr l))))
+      vl
+      (loop (more vl (car l)) (cdr l))))
+  (loop '() l))
+
+(define (jojo->fvar-list l)
+  (define (one vl n)
+    (if (member n vl)
+      vl
+      (cons n vl)))
+  (define (more vl jo)
+    (match jo
+      [{'var n}         vl]
+      [{'fvar n}        (one vl n)]
+      [{'bind n}        vl]
+      [{'call n}        vl]
+      [{'apply}         vl]
+      [{'arrow ac sc}   (loop vl (append ac sc))]
+      [{'lambda al}     (arrow-loop vl al)]))
+  (define (arrow-loop vl l)
+    (if (null? l)
+      vl
+      (match (car l)
+        [{'arrow ac sc}
+         (arrow-loop (loop vl (append ac sc)) (cdr l))])))
+  (define (loop vl l)
+    (if (null? l)
+      vl
+      (loop (more vl (car l)) (cdr l))))
   (loop '() l))
 
 (define id/counter 0)
@@ -841,6 +936,112 @@
                              (push rs {0 cut rs/exit sjj})
                              (rs/next)))])
                 (push gs {0 cover gs/exit {dl3 dl4}})
+                (cond [(gs/exit)
+                       #t]
+                      [else (orz 'type-check/arrow
+                              ("cover fail~%"))]))]
+             [else (orz 'type-check/arrow
+                     ("unify fail~%"))]))]))
+
+(define (type-check/function t b)
+  (: type body -> bool)
+  (match t
+    [{'arrow tajj tsjj}
+     (for-each (lambda (a) (type-check/arrow t a))
+               b)]
+    [__ (orz 'type-check/function
+          ("type of function must be arrow~%")
+          ("type : ~a~%" t))]))
+
+(define (type-check/arrow ta a)
+  (: type-arrow arrow -> bool)
+  (match {ta a}
+    [{{'arrow tajj tsjj} {'arrow ajj sjj}}
+     (let* ([dl1 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs {0 compose rs/exit tajj})
+                    (rs/next)))]
+            [dl2 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs {0 cut rs/exit ajj})
+                    (rs/next)))])
+       (push gs {0 unify gs/exit {dl1 dl2}})
+       (cond [(gs/next)
+              (let* ([dl3 (call-with-output-to-new-ds
+                           (lambda ()
+                             (push rs {0 compose rs/exit tsjj})
+                             (rs/next)))]
+                     [dl4 (call-with-output-to-new-ds
+                           (lambda ()
+                             (push rs {0 cut rs/exit sjj})
+                             (rs/next)))])
+                (push gs {0 cover gs/exit {dl3 dl4}})
+                (cond [(gs/exit)
+                       #t]
+                      [else (orz 'type-check/arrow
+                              ("cover fail~%"))]))]
+             [else (orz 'type-check/arrow
+                     ("unify fail~%"))]))]))
+
+(define (type-check/arrow ta a)
+  (: type-arrow arrow -> bool)
+  (match {ta a}
+    [{{'arrow tlo tajj tsjj} {'arrow lo ajj sjj}}
+     (let* ([dl1 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs (new-struct
+                              (pair-list
+                               'c      0
+                               'ex     cut
+                               'end    rs/exit
+                               'unirc  ><><><
+                               'jj     tajj)))
+                    (rs/next)))]
+            [dl2 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs (new-struct
+                              (pair-list
+                               'c      0
+                               'ex     cut
+                               'end    rs/exit
+                               'unirc  ><><><
+                               'jj     ajj)))
+                    (rs/next)))])
+       (push gs (new-struct
+                 (pair-list
+                  'c      0
+                  'ex     unify
+                  'end    gs/exit
+                  'dl+    dl1
+                  'dl-    dl2)))
+       (cond [(gs/next)
+              (let* ([dl3 (call-with-output-to-new-ds
+                           (lambda ()
+                             (push rs (new-struct
+                                       (pair-list
+                                        'c      0
+                                        'ex     cut
+                                        'end    rs/exit
+                                        'unirc  ><><><
+                                        'jj     tsjj)))
+                             (rs/next)))]
+                     [dl4 (call-with-output-to-new-ds
+                           (lambda ()
+                             (push rs (new-struct
+                                       (pair-list
+                                        'c      0
+                                        'ex     cut
+                                        'end    rs/exit
+                                        'unirc  ><><><
+                                        'jj     sjj)))
+                             (rs/next)))])
+                (push gs (new-struct
+                          (pair-list
+                           'c      0
+                           'ex     cover
+                           'end    gs/exit
+                           'dl+    dl3
+                           'dl-    dl4)))
                 (cond [(gs/exit)
                        #t]
                       [else (orz 'type-check/arrow

@@ -1,7 +1,6 @@
 ;; use chez scheme
 
 (print-graph #t)
-
 (include "lib/define-macro.scm")
 (include "lib/flower-barcket.scm")
 (include "lib/match.scm")

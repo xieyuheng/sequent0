@@ -3,10 +3,6 @@
 
 * todo
 
-  - try too use the new rsp & gsp interface
-
-  - actual new structure of rs & gs
-
   - new compose/var cut/var
     which use the rs to handle scope
     which return uni-var to ds
@@ -74,6 +70,36 @@
        done               {data ...})
     #+end_src
 
+* stack
+
+  #+begin_src scheme
+  (define-macro (push s v) `(set! ,s (cons ,v ,s)))
+  (define-macro (push-list s l)
+    `(set! ,s (append ,l ,s)))
+
+  (define (tos s) (car s))
+  (define-macro (pop s)
+    (let ([v (gensym "pop/v")])
+      `(let ([,v (car ,s)])
+         (set! ,s (cdr ,s))
+         ,v)))
+  (define-macro (pop-list s n)
+    (let ([v (gensym "fetch/v")])
+      `(let ([,v (take ,s ,n)])
+         (set! ,s (drop ,s ,n))
+         ,v)))
+  #+end_src
+
+* ns
+
+*** ns
+
+    #+begin_src scheme
+    ;; name-stack
+    (define ns '())
+    (: ns {(name . meaning) ...})
+    #+end_src
+
 *** meaning
 
     #+begin_src scheme :tangle no
@@ -83,80 +109,38 @@
        meaning-lambda     arrow {arrow ...})
     #+end_src
 
-* stack
+* ds
 
-*** stack
+*** ds
 
     #+begin_src scheme
-    (define ns '())
+    ;; data-stack
     (define ds '())
-    (define bs '())
-    (define rs '())
-    (define gs '())
-
-    (define-macro (push s v) `(set! ,s (cons ,v ,s)))
-    (define-macro (put s l)
-      `(set! ,s (append ,l ,s)))
-
-    (define (tos s) (car s))
-    (define-macro (pop s)
-      (let ([v (gensym "pop/v")])
-        `(let ([,v (car ,s)])
-           (set! ,s (cdr ,s))
-           ,v)))
-    (define-macro (fetch s n)
-      (let ([v (gensym "fetch/v")])
-        `(let ([,v (take ,s ,n)])
-           (set! ,s (drop ,s ,n))
-           ,v)))
+    (: ds {data ...})
     #+end_src
 
-*** stack point
+*** call-with-output-to-new-ds
 
     #+begin_src scheme
-    ;; name-stack
-    (: ns {(name . meaning) ...})
-
-    ;; data-stack
-    (: ds {data ...})
-
-    ;; binding-stack
-    (: bs {(id . ls) ...})
-
-    ;; return-stack
-    (define (rs/exit) (void))
-    (define (rs/next)
-      (match (tos rs)
-        [{c ex end jj}
-         (ex)]))
-    (define rsp-proto
-      (new-struct
-       (pair-list
-        'c      0
-        'ex     '(explainer)
-        'end    rs/exit
-        'vrc    '(var record)
-        'jj     '(jojo))))
-
-    ;; goal-stack
-    ;;   binding-stack is to record solution of equations in goal-stack
-    (define (gs/exit) (void))
-    (define (gs/next)
-      (: -> bool)
-      (match (tos gs)
-        [{c ex end {dl1 dl2}}
-         (ex)]))
-    (define gsp-proto
-      (new-struct
-       (pair-list
-        'c      0
-        'ex     '(explainer)
-        'end    gs/exit
-        'dl+    '(data-list)
-        'dl-    '(data-list))))
+    (define (call-with-output-to-new-ds f)
+      (: function -> new-ds)
+      (let ([ds-backup ds])
+        (set! ds '())
+        (f)
+        (let ([new-ds ds])
+          (set! ds ds-backup)
+          new-ds)))
     #+end_src
 
 * bs
+
+*** bs
+
+    #+begin_src scheme
+    ;; binding-stack
+    (define bs '())
+    (: bs {(id . ls) ...})
+    #+end_src
 
 *** bs/commit & id/commit
 
@@ -327,19 +311,50 @@
               (eq? level1 level2))]))
     #+end_src
 
-* ds
+* rs
 
-*** call-with-output-to-new-ds
+*** rs
 
     #+begin_src scheme
-    (define (call-with-output-to-new-ds f)
-      (: function -> new-ds)
-      (let ([ds-backup ds])
-        (set! ds '())
-        (f)
-        (let ([new-ds ds])
-          (set! ds ds-backup)
-          new-ds)))
+    ;; return-stack
+    (define rs '())
+    (define (rs/exit) (void))
+    (define (rs/next)
+      (match (tos rs)
+        [{c ex end jj}
+         (ex)]))
+    (define rsp-proto
+      (new-struct
+       (pair-list
+        'c      0
+        'ex     '(explainer)
+        'end    rs/exit
+        'vrc    '(var record)
+        'jj     '(jojo))))
+    #+end_src
+
+* gs
+
+*** gs
+
+    #+begin_src scheme
+    ;; goal-stack
+    ;;   binding-stack is to record solution of equations in goal-stack
+    (define gs '())
+    (define (gs/exit) (void))
+    (define (gs/next)
+      (: -> bool)
+      (match (tos gs)
+        [{c ex end {dl1 dl2}}
+         (ex)]))
+    (define gsp-proto
+      (new-struct
+       (pair-list
+        'c      0
+        'ex     '(explainer)
+        'end    gs/exit
+        'dl+    '(data-list)
+        'dl-    '(data-list))))
     #+end_src
 
 * occur-check
@@ -394,7 +409,7 @@
          (match (vector-ref k 0)
            [{'done dl} (list-ref dl i)]
            [{'todo b dl}
-            (put ds dl)
+            (push-list ds dl)
             (compose/function t b)
             (let ([result (pop ds)])
               (cond [(equal? result t) #f]
@@ -415,18 +430,20 @@
     #+begin_src scheme
     (define (cover)
       (: -> bool)
-      (match (pop gs)
-        [{c ex end {dl1 dl2}}
-         (cond [(>= c (length dl1))
-                (end)
-                #t]
-               [else
-                (let ([d1 (list-ref dl1 c)]
-                      [d2 (list-ref dl2 c)])
-                  (push gs {(+ 1 c) ex end {dl1 dl2}})
-                  (if (cover/data/data d1 d2)
-                    (gs/next)
-                    #f))])]))
+      (let* ([gsp (pop gs)]
+             [c   (^ gsp 'c)]
+             [ex  (^ gsp 'ex)]
+             [end (^ gsp 'end)]
+             [dl1 (^ gsp 'dl+)]
+             [dl2 (^ gsp 'dl-)])
+        (if3 [(>= c (length dl1))]
+             [(end)
+              #t]
+             [(push gs (% gsp 'c (+ 1 c)))
+              (if (cover/data/data (list-ref dl1 c)
+                                   (list-ref dl2 c))
+                (gs/next)
+                #f)])))
     #+end_src
 
 *** [new] cover
@@ -438,8 +455,8 @@
              [c   (^ gsp 'c)]
              [ex  (^ gsp 'ex)]
              [end (^ gsp 'end)]
-             [dl1 (^ gsp 'dl1)]
-             [dl2 (^ gsp 'dl2)])
+             [dl1 (^ gsp 'dl+)]
+             [dl2 (^ gsp 'dl-)])
         (cond [(>= c (length dl1))
                (end)
                #t]
@@ -491,7 +508,11 @@
           ;; cons push gs
           [{{'cons n1 dl1} {'cons n2 dl2}}
            (cond [(eq? n1 n2)
-                  (push gs {0 cover gs/exit {dl1 dl2}})
+                  (push gs (% gsp-proto
+                              'ex cover
+                              'end gs/exit
+                              'dl+ dl1
+                              'dl- dl2))
                   (gs/next)]
                  [else #f])]
           ;; trunk is the tricky part
@@ -559,7 +580,11 @@
                   (match {(vector-ref k1 0) (vector-ref k2 0)}
                     [{{'todo b1 dl1} {'todo b2 dl2}}
                      (cond [(equal? {t1 i1 b1} {t2 i2 b2})
-                            (push gs {0 cover gs/exit {dl1 dl2}})
+                            (push gs (% gsp-proto
+                                        'ex cover
+                                        'end gs/exit
+                                        'dl+ dl1
+                                        'dl- dl2))
                             (gs/next)]
                            [else #f])])])])))
     #+end_src
@@ -593,18 +618,20 @@
     #+begin_src scheme
     (define (unify)
       (: -> bool)
-      (match (pop gs)
-        [{c ex end {dl1 dl2}}
-         (cond [(>= c (length dl1))
-                (end)
-                #t]
-               [else
-                (let ([d1 (list-ref dl1 c)]
-                      [d2 (list-ref dl2 c)])
-                  (push gs {(+ 1 c) ex end {dl1 dl2}})
-                  (if (unify/data/data d1 d2)
-                    (gs/next)
-                    #f))])]))
+      (let* ([gsp (pop gs)]
+             [c   (^ gsp 'c)]
+             [ex  (^ gsp 'ex)]
+             [end (^ gsp 'end)]
+             [dl1 (^ gsp 'dl+)]
+             [dl2 (^ gsp 'dl-)])
+        (if3 [(>= c (length dl1))]
+             [(end)
+              #t]
+             [(push gs (% gsp 'c (+ 1 c)))
+              (if (unify/data/data (list-ref dl1 c)
+                                   (list-ref dl2 c))
+                (gs/next)
+                #f)])))
     #+end_src
 
 *** unify/data/data
@@ -630,7 +657,11 @@
           ;; cons push gs
           [{{'cons n1 dl1} {'cons n2 dl2}}
            (cond [(eq? n1 n2)
-                  (push gs {0 unify gs/exit {dl1 dl2}})
+                  (push gs (% gsp-proto
+                              'ex  unify
+                              'end gs/exit
+                              'dl+ dl1
+                              'dl- dl2))
                   (gs/next)]
                  [else #f])]
           ;; trunk is the tricky part
@@ -698,7 +729,11 @@
                   (match {(vector-ref k1 0) (vector-ref k2 0)}
                     [{{'todo b1 dl1} {'todo b2 dl2}}
                      (cond [(equal? {t1 i1 b1} {t2 i2 b2})
-                            (push gs {0 unify gs/exit {dl1 dl2}})
+                            (push gs (% gsp-proto
+                                        'ex unify
+                                        'end gs/exit
+                                        'dl+ dl1
+                                        'dl- dl2))
                             (gs/next)]
                            [else #f])])])])))
     #+end_src
@@ -709,15 +744,16 @@
 
     #+begin_src scheme
     (define (compose)
-      (match (pop rs)
-        [{c ex end jj}
-         (cond [(>= c (length jj))
-                (end)]
-               [else
-                (let ([j (list-ref jj c)])
-                  (push rs {(+ 1 c) ex end jj})
-                  (compose/jo j)
-                  (rs/next))])]))
+      (let* ([rsp (pop rs)]
+             [c   (^ rsp 'c)]
+             [ex  (^ rsp 'ex)]
+             [end (^ rsp 'end)]
+             [jj  (^ rsp 'jj)])
+        (if3 [(>= c (length jj))]
+             [(end)]
+             [(push rs (% rsp 'c (+ 1 c)))
+              (compose/jo (list-ref jj c))
+              (rs/next)])))
     #+end_src
 
 *** compose/jo
@@ -787,10 +823,10 @@
              (match (cdr found)
                [{'meaning-type pt n nl}
                 (let ([len (type/input-number pt)])
-                  (push ds {'cons n (fetch ds len)}))]
+                  (push ds {'cons n (pop-list ds len)}))]
                [{'meaning-data pt n n0}
                 (let ([len (type/input-number pt)])
-                  (push ds {'cons n (fetch ds len)}))]
+                  (push ds {'cons n (pop-list ds len)}))]
                [{'meaning-lambda pt pb}
                 (compose/function pt pb)])))]))
 
@@ -800,9 +836,13 @@
       ;;   it needs to know the type to get input-number & output-number
       (let ([sjj (compose/try-body b)])
         (if sjj
-          (push rs {0 compose rs/next sjj})
-          (let ([dl (fetch ds (type/input-number t))])
-            (put ds (create-trunk-list t b dl))))))
+          (push rs (% rsp-proto
+                      'ex   compose
+                      'end  rs/next
+                      'jj   sjj))
+          ;; no need to call (rs/next) here
+          (let ([dl (pop-list ds (type/input-number t))])
+            (push-list ds (create-trunk-list t b dl))))))
 
     (define (compose/try-body b)
       (: body -> (or #f sjj))
@@ -816,18 +856,24 @@
                 [gs0 gs])
            (let* ([dl1 (call-with-output-to-new-ds
                         (lambda ()
-                          (push rs {0 compose rs/exit ajj})
+                          (push rs (% rsp-proto
+                                      'ex   compose
+                                      'end  rs/exit
+                                      'jj   ajj))
                           (rs/next)))]
-                  [dl2 (fetch ds (length dl1))])
-             (push bs '(commit-point))
-             (push gs {0 cover bs/commit {dl1 dl2}})
-             (if (gs/next)
-               sjj
-               (let ()
-                 (set! ds ds0)
-                 (set! bs bs0)
-                 (set! gs gs0)
-                 (compose/try-body r)))))]))
+                  [dl2 (pop-list ds (length dl1))])
+             (if3 [(push bs '(commit-point))
+                   (push gs (% gsp-proto
+                               'ex   cover
+                               'end  bs/commit
+                               'dl+  dl1
+                               'dl-  dl2))
+                   (gs/next)]
+                  [sjj]
+                  [(set! ds ds0)
+                   (set! bs bs0)
+                   (set! gs gs0)
+                   (compose/try-body r)])))]))
 
     (define (create-trunk-list t b dl)
       (let ([k (vector {'todo b dl})])
@@ -877,15 +923,16 @@
 
     #+begin_src scheme
     (define (cut)
-      (match (pop rs)
-        [{c ex end jj}
-         (cond [(>= c (length jj))
-                (end)]
-               [else
-                (let ([j (list-ref jj c)])
-                  (push rs {(+ 1 c) ex end jj})
-                  (cut/jo j)
-                  (rs/next))])]))
+      (let* ([rsp (pop rs)]
+             [c   (^ rsp 'c)]
+             [ex  (^ rsp 'ex)]
+             [end (^ rsp 'end)]
+             [jj  (^ rsp 'jj)])
+        (if3 [(>= c (length jj))]
+             [(end)]
+             [(push rs (% rsp 'c (+ 1 c)))
+              (cut/jo (list-ref jj c))
+              (rs/next)])))
     #+end_src
 
 *** cut/jo
@@ -926,12 +973,12 @@
            (if (not found)
              (orz 'cut/call ("unknow name : ~a~%" n))
              (match (cdr found)
-               [{'meaning-type pt n nl}
-                (cut/type pt)]
-               [{'meaning-data pt n n0}
-                (cut/type pt)]
-               [{'meaning-lambda pt pb}
-                (cut/type pt)])))]))
+               [{'meaning-type a n nl}
+                (cut/type a)]
+               [{'meaning-data a n n0}
+                (cut/type a)]
+               [{'meaning-lambda a al}
+                (cut/type a)])))]))
 
     (define (cut/type a)
       (: arrow -> !)
@@ -939,15 +986,22 @@
         [{'arrow ajj sjj}
          (let* ([dl1 (call-with-output-to-new-ds
                       (lambda ()
-                        (push rs {0 compose rs/exit ajj})
+                        (push rs (% rsp-proto
+                                    'ex   compose
+                                    'end  rs/exit
+                                    'jj   ajj))
                         (rs/next)))]
-                [dl2 (fetch ds (length dl1))])
-           (push bs '(commit-point))
-           (push gs {0 unify bs/commit {dl1 dl2}})
-           (if (gs/next)
-             (for-each compose/jo sjj)
-             (orz 'cut/type
-               ("fail on unify~%"))))]))
+                [dl2 (pop-list ds (length dl1))])
+           (if3 [(push bs '(commit-point))
+                 (push gs (% gsp-proto
+                             'ex   unify
+                             'end  bs/commit
+                             'dl+  dl1
+                             'dl-  dl2))
+                 (gs/next)]
+                [(for-each compose/jo sjj)]
+                [(orz 'cut/type
+                   ("fail on unify~%"))]))]))
     #+end_src
 
 *** cut/apply

@@ -279,6 +279,34 @@
           (cond [(equal? result t) #f]
                 [else result]))])]))
 
+(define id/counter 0)
+
+;; (define (id/new n ls)
+;;   (set! id/counter (+ 1 id/counter))
+;;   (vector (cons n id/counter) ls))
+
+(define (id/new n)
+  (set! id/counter (+ 1 id/counter))
+  (vector (cons n id/counter) '()))
+
+(define (vl->vrc vl)
+  (map (lambda (v)
+         (match v
+           [{'var n}
+            {'uni-var (id/new n) 0}]))
+    vl))
+
+(define (v->uv v)
+  (match v
+    [{'var n}
+     (let ([rsp (tos rs)]
+           [found (assq n (^ rsp 'vrc))])
+       (if found
+         (cdr found)
+         (orz 'v->uv
+           ("can not find name : ~a~%" n)
+           ("rsp var record : ~a~%" (^ rsp 'vrc)))))]))
+
 (define (cover)
   (: -> bool)
   (let* ([gsp (pop gs)]
@@ -539,7 +567,8 @@
 (define (compose/var j)
   ;; (if (var/fresh? j)
   ;;   (bs/extend-new j))
-  (let ([d (bs/deep j)])
+  (let* ([uv (v->uv j)]
+         [d (bs/deep uv)])
     (push ds d)))
 
 (define (type/input-number t)
@@ -668,13 +697,14 @@
 (define (cut/var j)
   ;; (if (var/fresh? j)
   ;;   (bs/extend-new j))
-  (let ([d (bs/deep j)])
-    (let ([found-d (bs/find-up j)])
+  (let* ([uv (v->uv j)]
+         [d (bs/deep uv)])
+    (let ([found-d (bs/find-up uv)])
       (if found-d
         (push ds found-d)
-        (match j
-          [{'var id level}
-           (push ds {'var id (+ 1 level)})])))))
+        (match uv
+          [{'uni-var id level}
+           (push ds {'uni-var id (+ 1 level)})])))))
 
 (define (cut/call j)
   (match j
@@ -934,24 +964,7 @@
   `($run (quote ,s)))
 
 (define ($run s)
-  (for-each compose/jo (compile/jojo s)))
-
-(define id/counter 0)
-
-;; (define (id/new n ls)
-;;   (set! id/counter (+ 1 id/counter))
-;;   (vector (cons n id/counter) ls))
-
-(define (id/new n)
-  (set! id/counter (+ 1 id/counter))
-  (vector (cons n id/counter) '()))
-
-(define (vl->vrc vl)
-  (map (lambda (v)
-         (match v
-           [{'var n}
-            {'uni-var (id/new n) 0}]))
-    vl))
+  (for-each compose/jo (map compile/jo s)))
 
 (define (type-check ta al)
   (: arrow {arrow ...} -> bool)

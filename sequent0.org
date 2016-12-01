@@ -3,9 +3,12 @@
 
 * todo
 
-  - new compose/var cut/var
-    which use the rs to handle scope
-    which return uni-var to ds
+  - undate dispatchers
+    | jo      | data    | double data |
+    |---------+---------+-------------|
+    | compose | bs/deep | cover       |
+    | cut     |         | unify       |
+    for new data-constructors
 
 * note
 
@@ -416,6 +419,48 @@
                     [else result]))])]))
     #+end_src
 
+* uni-var
+
+*** id/new
+
+    #+begin_src scheme
+    (define id/counter 0)
+
+    ;; (define (id/new n ls)
+    ;;   (set! id/counter (+ 1 id/counter))
+    ;;   (vector (cons n id/counter) ls))
+
+    (define (id/new n)
+      (set! id/counter (+ 1 id/counter))
+      (vector (cons n id/counter) '()))
+    #+end_src
+
+*** vl->vrc
+
+    #+begin_src scheme
+    (define (vl->vrc vl)
+      (map (lambda (v)
+             (match v
+               [{'var n}
+                {'uni-var (id/new n) 0}]))
+        vl))
+    #+end_src
+
+*** v->uv
+
+    #+begin_src scheme
+    (define (v->uv v)
+      (match v
+        [{'var n}
+         (let ([rsp (tos rs)]
+               [found (assq n (^ rsp 'vrc))])
+           (if found
+             (cdr found)
+             (orz 'v->uv
+               ("can not find name : ~a~%" n)
+               ("rsp var record : ~a~%" (^ rsp 'vrc)))))]))
+    #+end_src
+
 * cover
 
 *** note
@@ -774,7 +819,8 @@
     (define (compose/var j)
       ;; (if (var/fresh? j)
       ;;   (bs/extend-new j))
-      (let ([d (bs/deep j)])
+      (let* ([uv (v->uv j)]
+             [d (bs/deep uv)])
         (push ds d)))
     #+end_src
 
@@ -954,13 +1000,14 @@
     (define (cut/var j)
       ;; (if (var/fresh? j)
       ;;   (bs/extend-new j))
-      (let ([d (bs/deep j)])
-        (let ([found-d (bs/find-up j)])
+      (let* ([uv (v->uv j)]
+             [d (bs/deep uv)])
+        (let ([found-d (bs/find-up uv)])
           (if found-d
             (push ds found-d)
-            (match j
-              [{'var id level}
-               (push ds {'var id (+ 1 level)})])))))
+            (match uv
+              [{'uni-var id level}
+               (push ds {'uni-var id (+ 1 level)})])))))
     #+end_src
 
 *** cut/call & cut/type
@@ -1307,35 +1354,8 @@
     `($run (quote ,s)))
 
   (define ($run s)
-    (for-each compose/jo (compile/jojo s)))
+    (for-each compose/jo (map compile/jo s)))
   #+end_src
-
-* uni-var
-
-*** id/new
-
-    #+begin_src scheme
-    (define id/counter 0)
-
-    ;; (define (id/new n ls)
-    ;;   (set! id/counter (+ 1 id/counter))
-    ;;   (vector (cons n id/counter) ls))
-
-    (define (id/new n)
-      (set! id/counter (+ 1 id/counter))
-      (vector (cons n id/counter) '()))
-    #+end_src
-
-*** vl->vrc
-
-    #+begin_src scheme
-    (define (vl->vrc vl)
-      (map (lambda (v)
-             (match v
-               [{'var n}
-                {'uni-var (id/new n) 0}]))
-        vl))
-    #+end_src
 
 * ><><>< type-check
 

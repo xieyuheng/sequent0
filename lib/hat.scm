@@ -42,6 +42,10 @@
   (cons (cons 'method-record mpl)
         vpl))
 
+(define (new-struct vpl)
+  (cons (cons 'method-record '())
+        vpl))
+
 ;;;; test
 
 ;; (define o1

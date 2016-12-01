@@ -3,7 +3,9 @@
 
 * todo
 
-  - new structure of rs
+  - try too use the new rsp & gsp interface
+
+  - actual new structure of rs & gs
 
   - new compose/var cut/var
     which use the rs to handle scope
@@ -28,98 +30,115 @@
 
 *** syntax
 
-    #+begin_src scheme :tangle no
-    (type syntax
-      var                :var
-      bind               %:var
-      name               name
-      arrow              (-> [syntax ...] [syntax ...])
-      lambda             (lambda type-arrow arrow ...)
-      apply              @)
+    #+begin_src scheme
+    (: syntax
+       var                :var
+       bind               %:var
+       name               name
+       arrow              (-> [syntax ...] [syntax ...])
+       lambda             (lambda type-arrow arrow ...)
+       apply              @)
     #+end_src
 
-*** data & jo
+*** jo
 
-    #+begin_src scheme :tangle no
-    (type data
-      uni-var            id level
-      bind               var data
-      cons               name {data ...}
-      arrow              local jojo jojo
-      lambda             arrow body
-      trunk              type (vector trunky) index)
+    #+begin_src scheme
+    (: jo
+       var                name
+       bind               name
+       call               name
+       arrow              {var ...} {fvar ...} {jo ...} {jo ...}
+       lambda             arrow {arrow ...}
+       apply)
+    #+end_src
 
-    (type local          occur-list bind-record)
+*** data
 
-    (type trunky
-      todo               body {data ...}
-      done               {data ...})
+    #+begin_src scheme
+    (: data
+       uni-var            id level
+       uni-bind           uni-var data
+       cons               name {data ...}
+       uni-arrow          {var ...} {(fvar . uni-var) ...} {jo ...} {jo ...}
+       uni-lambda         uni-arrow {uni-arrow ...}
+       trunk              uni-arrow (vector trunky) index)
 
-    (type jojo           {jo ...})
-    (type body           {arrow ...})
-
-    (type id             (vector (name . counter) ls))
+    (: id                 (vector (name . counter) ls))
+    (: ls                 {(level . data) ...})
     ;; vector thus unique
     ;; ls (level binding-list) in id for commit
 
-    (type jo
-      var                name
-      bind               name
-      call               name
-      arrow              ~
-      lambda             ~
-      apply)
+    (: trunky
+       todo               {uni-arrow ...} {data ...}
+       done               {data ...})
     #+end_src
 
 *** meaning
 
     #+begin_src scheme :tangle no
-    (type meaning
-      meaning-type      type name {name ...}
-      meaning-data      type name name
-      meaning-lambda    type body)
-    #+end_src
-
-*** stack
-
-    #+begin_src scheme :tangle no
-    (type ns {(name . meaning) ...})
-
-    (type ds {data ...})
-
-    (type bs {(id . ls) ...})
-    (type ls {(level . data) ...})
-
-    (type rs {{counter explainer ender jojo} ...})
-    (type gs {{counter explainer ender {data-list data-list}} ...})
+    (: meaning
+       meaning-type       arrow name {name ...}
+       meaning-data       arrow name name
+       meaning-lambda     arrow {arrow ...})
     #+end_src
 
 
 * stack
 
-  #+begin_src scheme
-  (define ns '())
-  (define ds '())
-  (define bs '())
-  (define rs '())
-  (define gs '())
+*** stack
 
-  (define-macro (push s v) `(set! ,s (cons ,v ,s)))
-  (define-macro (put s l)
-    `(set! ,s (append ,l ,s)))
+    #+begin_src scheme
+    (define ns '())
+    (define ds '())
+    (define bs '())
+    (define rs '())
+    (define gs '())
 
-  (define (tos s) (car s))
-  (define-macro (pop s)
-    (let ([v (gensym "pop/v")])
-      `(let ([,v (car ,s)])
-         (set! ,s (cdr ,s))
-         ,v)))
-  (define-macro (fetch s n)
-    (let ([v (gensym "fetch/v")])
-      `(let ([,v (take ,s ,n)])
-         (set! ,s (drop ,s ,n))
-         ,v)))
-  #+end_src
+    (define-macro (push s v) `(set! ,s (cons ,v ,s)))
+    (define-macro (put s l)
+      `(set! ,s (append ,l ,s)))
+
+    (define (tos s) (car s))
+    (define-macro (pop s)
+      (let ([v (gensym "pop/v")])
+        `(let ([,v (car ,s)])
+           (set! ,s (cdr ,s))
+           ,v)))
+    (define-macro (fetch s n)
+      (let ([v (gensym "fetch/v")])
+        `(let ([,v (take ,s ,n)])
+           (set! ,s (drop ,s ,n))
+           ,v)))
+    #+end_src
+
+*** stack point
+
+    #+begin_src scheme
+    (: ns {(name . meaning) ...})
+    (: ds {data ...})
+    (: bs {(id . ls) ...})
+
+    (define rsp-proto
+      (new-struct
+       (pair-list
+        'c      '() ;; counter
+        'ex     '() ;; explainer
+        'end    '() ;; ender
+        'unirc  '() ;; uni-record
+        'jj     '() ;; jojo
+        )))
+    (: unirc {(var . uni-var) ...})
+
+    (define gsp-proto
+      (new-struct
+       (pair-list
+        'c      '() ;; counter
+        'ex     '() ;; explainer
+        'end    '() ;; ender
+        'dl+    '() ;; data-list
+        'dl-    '() ;; data-list
+        )))
+    #+end_src
 
 
 * bs
@@ -1276,7 +1295,7 @@
       <undo-when-success>
       #+end_src
 
-*** ><><>< type-check/function
+*** type-check/function
 
     - ><><>< in lack of bind-unify
 
@@ -1314,6 +1333,118 @@
                                  (push rs {0 cut rs/exit sjj})
                                  (rs/next)))])
                     (push gs {0 cover gs/exit {dl3 dl4}})
+                    (cond [(gs/exit)
+                           #t]
+                          [else (orz 'type-check/arrow
+                                  ("cover fail~%"))]))]
+                 [else (orz 'type-check/arrow
+                         ("unify fail~%"))]))]))
+    #+end_src
+
+*** [new] type-check/function
+
+    - ><><>< in lack of bind-unify
+
+    #+begin_src scheme
+    (define (type-check/function t b)
+      (: type body -> bool)
+      (match t
+        [{'arrow tajj tsjj}
+         (for-each (lambda (a) (type-check/arrow t a))
+                   b)]
+        [__ (orz 'type-check/function
+              ("type of function must be arrow~%")
+              ("type : ~a~%" t))]))
+
+    (define (type-check/arrow ta a)
+      (: type-arrow arrow -> bool)
+      (match {ta a}
+        [{{'arrow tajj tsjj} {'arrow ajj sjj}}
+         (let* ([dl1 (call-with-output-to-new-ds
+                      (lambda ()
+                        (push rs {0 compose rs/exit tajj})
+                        (rs/next)))]
+                [dl2 (call-with-output-to-new-ds
+                      (lambda ()
+                        (push rs {0 cut rs/exit ajj})
+                        (rs/next)))])
+           (push gs {0 unify gs/exit {dl1 dl2}})
+           (cond [(gs/next)
+                  (let* ([dl3 (call-with-output-to-new-ds
+                               (lambda ()
+                                 (push rs {0 compose rs/exit tsjj})
+                                 (rs/next)))]
+                         [dl4 (call-with-output-to-new-ds
+                               (lambda ()
+                                 (push rs {0 cut rs/exit sjj})
+                                 (rs/next)))])
+                    (push gs {0 cover gs/exit {dl3 dl4}})
+                    (cond [(gs/exit)
+                           #t]
+                          [else (orz 'type-check/arrow
+                                  ("cover fail~%"))]))]
+                 [else (orz 'type-check/arrow
+                         ("unify fail~%"))]))]))
+
+    (define (type-check/arrow ta a)
+      (: type-arrow arrow -> bool)
+      (match {ta a}
+        [{{'arrow tlo tajj tsjj} {'arrow lo ajj sjj}}
+         (let* ([dl1 (call-with-output-to-new-ds
+                      (lambda ()
+                        (push rs (new-struct
+                                  (pair-list
+                                   'c      0
+                                   'ex     cut
+                                   'end    rs/exit
+                                   'unirc  ><><><
+                                   'jj     tajj)))
+                        (rs/next)))]
+                [dl2 (call-with-output-to-new-ds
+                      (lambda ()
+                        (push rs (new-struct
+                                  (pair-list
+                                   'c      0
+                                   'ex     cut
+                                   'end    rs/exit
+                                   'unirc  ><><><
+                                   'jj     ajj)))
+                        (rs/next)))])
+           (push gs (new-struct
+                     (pair-list
+                      'c      0
+                      'ex     unify
+                      'end    gs/exit
+                      'dl+    dl1
+                      'dl-    dl2)))
+           (cond [(gs/next)
+                  (let* ([dl3 (call-with-output-to-new-ds
+                               (lambda ()
+                                 (push rs (new-struct
+                                           (pair-list
+                                            'c      0
+                                            'ex     cut
+                                            'end    rs/exit
+                                            'unirc  ><><><
+                                            'jj     tsjj)))
+                                 (rs/next)))]
+                         [dl4 (call-with-output-to-new-ds
+                               (lambda ()
+                                 (push rs (new-struct
+                                           (pair-list
+                                            'c      0
+                                            'ex     cut
+                                            'end    rs/exit
+                                            'unirc  ><><><
+                                            'jj     sjj)))
+                                 (rs/next)))])
+                    (push gs (new-struct
+                              (pair-list
+                               'c      0
+                               'ex     cover
+                               'end    gs/exit
+                               'dl+    dl3
+                               'dl-    dl4)))
                     (cond [(gs/exit)
                            #t]
                           [else (orz 'type-check/arrow

@@ -63,16 +63,14 @@
   (set! id/counter (+ 1 id/counter))
   (vector (cons n id/counter) '()))
 
-(define (vl->vrc vl)
-  (map (lambda (v)
-         (match v
-           [{'var n}
-            {'uni-var (id/new n) 0}]))
-    vl))
+(define (nl->vrc nl)
+  (map (lambda (n)
+         (cons n (list 'uni-var (id/new n) 0)))
+    nl))
 
 (define (name->uni-var n)
-  (let ([rsp (tos rs)]
-        [found (assq n (^ rsp 'vrc))])
+  (let* ([rsp (tos rs)]
+         [found (assq n (^ rsp 'vrc))])
     (if found
       (cdr found)
       (orz 'name->uni-var
@@ -81,6 +79,9 @@
 
 (define (compile-arrow a)
   (pass2-arrow (pass1-arrow a)))
+
+(define (compile-jo j)
+  (pass2-jo (pass1-jo j)))
 
 (define (pass1-jo jo)
   (define (var? v)
@@ -343,11 +344,12 @@
 
 ;; return-stack
 (define rs '())
+
 (define (rs/exit) (void))
+
 (define (rs/next)
-  (match (tos rs)
-    [{c ex end jj}
-     (ex)]))
+  ((^ (tos rs) 'ex)))
+
 (define rsp-proto
   (new-struct
    (pair-list
@@ -397,17 +399,6 @@
             (bs/extend-up uv d)
        (push ds {'uni-bind uv d}))]))
 
-(: [for the first covering arrow]
-   <data-on-the-stack>
-   <point>
-   (push rs {compose exit <antecedent>})
-   <ds/gather>
-   (push gs {cover commit <gathered>})
-   succ -> commit (<loop>)
-   fail -> undo
-   (push rs {compose exit <succedent>})
-   all fail -> form trunk)
-
 (define (compose/call j)
   (match j
     [{'call n}
@@ -424,28 +415,43 @@
            [{'meaning-lambda pt pb}
             (compose/function pt pb)])))]))
 
+(: [for the first covering arrow]
+   <data-on-the-stack>
+   <point>
+   (push rs {compose exit <antecedent>})
+   <ds/gather>
+   (push gs {cover commit <gathered>})
+   succ -> commit (<loop>)
+   fail -> undo
+   (push rs {compose exit <succedent>})
+   all fail -> form trunk)
+
 (define (compose/function t b)
   ;; note that
   ;;   when create-trunk-list
   ;;   it needs to know the type to get input-number & output-number
-  (let ([sjj (compose/try-body b)])
-    (if sjj
-      (push rs (% rsp-proto
-                  'ex   compose
-                  'end  rs/next
-                  'jj   sjj))
-      ;; no need to call (rs/next) here
-      (let ([dl (pop-list ds (type/input-number t))])
-        (push-list ds (create-trunk-list t b dl))))))
+  (match (compose/try-body b)
+    [{sjj vrc}
+     (if3 [sjj]
+          [(push rs (% rsp-proto
+                       'ex   compose
+                       'end  rs/exit
+                       'vrc  vrc
+                       'jj   sjj))
+           (rs/next)]
+          [(push-list ds
+            (create-trunk-list t b
+             (pop-list ds (type/input-number t))))])]))
 
 (define (compose/try-body b)
-  (: body -> (or #f sjj))
+  (: body -> (or #f {sjj vrc}))
   ;; return #f on fail
   ;; return sjj on success with commit
   (match b
     [{} #f]
-    [({'arrow ajj sjj} . r)
-     (let* ([ds0 ds]
+    [({'arrow nl fnl ajj sjj} . r)
+     (let* ([vrc (nl->vrc nl)]
+            [ds0 ds]
             [bs0 bs]
             [gs0 gs])
        (let* ([dl1 (call-with-output-to-new-ds
@@ -453,6 +459,7 @@
                       (push rs (% rsp-proto
                                   'ex   compose
                                   'end  rs/exit
+                                  'vrc  vrc
                                   'jj   ajj))
                       (rs/next)))]
               [dl2 (pop-list ds (length dl1))])
@@ -463,7 +470,7 @@
                            'dl+  dl1
                            'dl-  dl2))
                (gs/next)]
-              [sjj]
+              [{sjj vrc}]
               [(set! ds ds0)
                (set! bs bs0)
                (set! gs gs0)
@@ -477,13 +484,13 @@
 
 (define (type/input-number t)
   (match t
-    [{'arrow ajj sjj}
+    [{'arrow vnl fvnl ajj sjj}
      (length (call-with-output-to-new-ds
               (lambda () (for-each compose/jo ajj))))]))
 
 (define (type/output-number t)
   (match t
-    [{'arrow ajj sjj}
+    [{'arrow vnl fvnl ajj sjj}
      (length (call-with-output-to-new-ds
               (lambda () (for-each compose/jo sjj))))]))
 
@@ -559,7 +566,7 @@
 (define (cut/type a)
   (: arrow -> !)
   (match a
-    [{'arrow ajj sjj}
+    [{'arrow vnl fvnl ajj sjj}
      (let* ([dl1 (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
@@ -586,8 +593,8 @@
 
 ;; (define (cut/lambda j)
 ;;   (match j
-;;     [{'lambda {'arrow ajj sjj} b}
-;;      (push ds {'arrow ajj sjj})]
+;;     [{'lambda {'arrow vnl fvnl ajj sjj} b}
+;;      (push ds {'arrow vnl fvnl ajj sjj})]
 ;;     [__
 ;;      (orz 'cut/lambda
 ;;        ("can not handle jo : ~a~%" j)
@@ -599,20 +606,21 @@
 
 (define (cut/apply j)
   (match (bs/walk (pop ds))
-    [{'arrow ajj sjj}
-     (cut/type {'arrow ajj sjj})]
+    [{'arrow vnl fvnl ajj sjj}
+     (cut/type {'arrow vnl fvnl ajj sjj})]
     [__ (orz 'cut/apply
           ("can not handle jo : ~a~%" j))]))
 
 ;; goal-stack
 ;;   binding-stack is to record solution of equations in goal-stack
 (define gs '())
+
 (define (gs/exit) (void))
+
 (define (gs/next)
   (: -> bool)
-  (match (tos gs)
-    [{c ex end {dl1 dl2}}
-     (ex)]))
+  ((^ (tos gs) 'ex)))
+
 (define gsp-proto
   (new-struct
    (pair-list
@@ -647,15 +655,16 @@
     (match {d1 d2}
       ;; ignore the sub-data
       ;;   for it is used by top-level type-check
-      [{{'bind d v} __} (cover/data/data d d2)]
-      [{__ {'bind d v}} (cover/data/data d1 d)]
+      [{{'uni-bind uv d} __} (cover/data/data d d2)]
+      [{__ {'uni-bind uv d}} (cover/data/data d1 d)]
       ;; var is the hero
       ;; this should pass occur-check
-      [{{'var id1 level1} {'var id2 level2}}
+      [{{'uni-var id1 level1} {'uni-var id2 level2}}
        (cond [(uni-var/eq? d1 d2) #t] ;; no self-cover
-             [else (cover/var/data d1 d2)])]
-      [{{'var id level} __} (cover/var/data d1 d2)]
-      [{__ {'var id level}} #f] ;; the only difference from unify/data/data
+             [else (cover/uni-var/data d1 d2)])]
+      [{{'uni-var id level} __} (cover/uni-var/data d1 d2)]
+      [{__ {'uni-var id level}} #f]
+      ;; the only difference from unify/data/data
       ;; cons push gs
       [{{'cons n1 dl1} {'cons n2 dl2}}
        (cond [(eq? n1 n2)
@@ -682,12 +691,12 @@
 ;;   (list p1 p2 (equal? p1 p2)))
 ;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
 
-(define (cover/var/data v d)
+(define (cover/uni-var/data uv d)
   (: fresh-var data -> bool)
   ;; no consistent-check
   ;;   because we do not have infer
-  (if (occur-check/data v d)
-    (bs/extend v d)
+  (if (occur-check/data uv d)
+    (bs/extend uv d)
     #f))
 
 (define (cover/trunk/data t d)
@@ -748,20 +757,20 @@
     (match {d1 d2}
       ;; ignore the sub-data
       ;;   for it is used by top-level type-check
-      [{{'bind d v} __} (unify/data/data d d2)]
-      [{__ {'bind d v}} (unify/data/data d1 d)]
+      [{{'uni-bind uv d} __} (unify/data/data d d2)]
+      [{__ {'uni-bind uv d}} (unify/data/data d1 d)]
       ;; var is the hero
       ;; this should pass occur-check
-      [{{'var id1 level1} {'var id2 level2}}
+      [{{'uni-var id1 level1} {'uni-var id2 level2}}
        (cond [(uni-var/eq? d1 d2) #t] ;; no self-unify
-             [else (unify/var/data d1 d2)])]
-      [{{'var id level} __} (unify/var/data d1 d2)]
-      [{__ {'var id level}} (unify/var/data d2 d1)]
+             [else (unify/uni-var/data d1 d2)])]
+      [{{'uni-var id level} __} (unify/uni-var/data d1 d2)]
+      [{__ {'uni-var id level}} (unify/uni-var/data d2 d1)]
       ;; cons push gs
       [{{'cons n1 dl1} {'cons n2 dl2}}
        (cond [(eq? n1 n2)
               (push gs (% gsp-proto
-                          'ex  unify
+                          'ex unify
                           'end gs/exit
                           'dl+ dl1
                           'dl- dl2))
@@ -783,12 +792,12 @@
 ;;   (list p1 p2 (equal? p1 p2)))
 ;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
 
-(define (unify/var/data v d)
+(define (unify/uni-var/data uv d)
   (: fresh-var data -> bool)
   ;; no consistent-check
   ;;   because we do not have infer
-  (if (occur-check/data v d)
-    (bs/extend v d)
+  (if (occur-check/data uv d)
+    (bs/extend uv d)
     #f))
 
 (define (unify/trunk/data t d)
@@ -837,26 +846,26 @@
           (cond [(equal? result t) #f]
                 [else result]))])]))
 
-(define (occur-check/data v d)
-  (: fresh-var data -> bool)
+(define (occur-check/data uv d)
+  (: fresh-uni-var data -> bool)
   (match (bs/deep d)
-    [{'var id level} (not (uni-var/eq? v d))]
-    [{'cons n dl}    (occur-check/data-list v dl)]
-    [{'bind d sd}    (occur-check/data-list v {d sd})]
-    [{'trunk t k i}  (occur-check/trunk v d)]
-    [__              #t]))
+    [{'uni-var id level} (not (uni-var/eq? uv d))]
+    [{'cons n dl}        (occur-check/data-list uv dl)]
+    [{'uni-bind v d}     (occur-check/data-list uv {v d})]
+    [{'trunk t k i}      (occur-check/trunk uv d)]
+    [__                  #t]))
 
-(define (occur-check/data-list v dl)
-  (: fresh-var {data ...} -> bool)
+(define (occur-check/data-list uv dl)
+  (: fresh-uni-var {data ...} -> bool)
   (match dl
     [{} #t]
     [(d . r)
-     (if (occur-check/data v d)
-       (occur-check/data-list v r)
+     (if (occur-check/data uv d)
+       (occur-check/data-list uv r)
        #f)]))
 
-(define (occur-check/trunk v t)
-  (: fresh-var trunk -> bool)
+(define (occur-check/trunk uv t)
+  (: fresh-uni-var trunk -> bool)
   (match t
     [{'trunk t k i}
      (match (vector-ref k 0)
@@ -946,11 +955,11 @@
         (display "</def-data>\n")
         (display "\n")))))
 
-(define-macro (run s)
+(define-macro (run . s)
   `($run (quote ,s)))
 
 (define ($run s)
-  (for-each compose/jo (map compile/jo s)))
+  (for-each compose/jo (map compile-jo s)))
 
 (define (type-check ta al)
   (: arrow {arrow ...} -> bool)
@@ -965,10 +974,10 @@
 (define (type-check/arrow ta a)
   (: type-arrow arrow -> bool)
   (match {ta a}
-    [{{'arrow tvl tfvl tajj tsjj}
-      {'arrow vl fvl ajj sjj}}
-     (let* ([tvrc (vl->vrc tvl)]
-            [vrc (vl->vrc vl)]
+    [{{'arrow tnl tfnl tajj tsjj}
+      {'arrow nl fnl ajj sjj}}
+     (let* ([tvrc (nl->vrc tnl)]
+            [vrc (nl->vrc nl)]
             [dl-tajj (call-with-output-to-new-ds
                       (lambda ()
                         (push rs (% rsp-proto

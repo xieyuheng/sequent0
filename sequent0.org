@@ -3,9 +3,7 @@
 
 * todo
 
-  - fix the structure of uni-bind
-
-  - fix compose/bind & cut/bind
+  - fix cut/bind
 
   - undate dispatchers
     | jo      | data    | double data |
@@ -803,18 +801,16 @@
         (push ds d)))
     #+end_src
 
-*** ><>< compose/bind
+*** compose/bind
 
     #+begin_src scheme
     (define (compose/bind j)
       (match j
         [{'bind n}
-         (let* ([dl (call-with-output-to-new-ds
-                     (lambda ()
-                       (compose/jo j)))]
-                [d (car dl)])
-           (bs/extend-up v d)
-           (push ds {'uni-bind v d}))]))
+         (let* ([uv (name->uni-var n)]
+                [d (pop ds)])
+           (bs/extend-up uv d)
+           (push ds {'uni-bind uv d}))]))
     #+end_src
 
 *** compose/call & compose/function

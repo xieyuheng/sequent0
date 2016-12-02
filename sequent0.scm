@@ -9,9 +9,10 @@
 
 (: jo
    var                name
+   fvar               name
    bind               name
    call               name
-   arrow              {var ...} {fvar ...} {jo ...} {jo ...}
+   arrow              {var-name ...} {fvar-name ...} {jo ...} {jo ...}
    lambda             arrow {arrow ...}
    apply)
 
@@ -19,7 +20,7 @@
    uni-var            id level
    uni-bind           uni-var data
    cons               name {data ...}
-   uni-arrow          {var ...} {(fvar . uni-var) ...} {jo ...} {jo ...}
+   uni-arrow          {var-name ...} {(fvar-name . uni-var) ...} {jo ...} {jo ...}
    uni-lambda         uni-arrow {uni-arrow ...}
    trunk              uni-arrow (vector trunky) index)
 
@@ -164,7 +165,7 @@
     (match d
       ;; a var is fresh after bs/walk
       [{'cons n dl}             {'cons n (bs/deep-list dl)}]
-      [{'bind d sd}             {'bind (bs/deep d) (bs/deep sd)}]
+      [{'uni-bind v d}          {'bind (bs/deep v) (bs/deep d)}]
       [{'trunk t k i}           {'trunk t (bs/deep-trunky k) i}]
       [__                    d])))
 
@@ -175,8 +176,8 @@
   (vector-set!
     k 0
     (match (vector-ref k 0)
-      [{'todo b dl} {'todo b (bs/deep-list dl)}]
-      [{'done dl}   {'done (bs/deep-list dl)}])))
+      [{'todo al dl} {'todo al (bs/deep-list dl)}]
+      [{'done dl}    {'done (bs/deep-list dl)}])))
 
 (define (bs/find-up v)
   (: var -> (or data #f))
@@ -296,16 +297,14 @@
             {'uni-var (id/new n) 0}]))
     vl))
 
-(define (v->uv v)
-  (match v
-    [{'var n}
-     (let ([rsp (tos rs)]
-           [found (assq n (^ rsp 'vrc))])
-       (if found
-         (cdr found)
-         (orz 'v->uv
-           ("can not find name : ~a~%" n)
-           ("rsp var record : ~a~%" (^ rsp 'vrc)))))]))
+(define (name->uni-var n)
+  (let ([rsp (tos rs)]
+        [found (assq n (^ rsp 'vrc))])
+    (if found
+      (cdr found)
+      (orz 'name->uni-var
+        ("can not find name : ~a~%" n)
+        ("rsp var record : ~a~%" (^ rsp 'vrc))))))
 
 (define (cover)
   (: -> bool)
@@ -323,41 +322,6 @@
                                (list-ref dl2 c))
             (gs/next)
             #f)])))
-
-(define (cover)
-  (: -> bool)
-  (let* ([gsp (pop gs)]
-         [c   (^ gsp 'c)]
-         [ex  (^ gsp 'ex)]
-         [end (^ gsp 'end)]
-         [dl1 (^ gsp 'dl+)]
-         [dl2 (^ gsp 'dl-)])
-    (cond [(>= c (length dl1))
-           (end)
-           #t]
-          [else
-           (let ([d1 (list-ref dl1 c)]
-                 [d2 (list-ref dl2 c)])
-             (push gs (% gsp
-                         'c (+ 1 c)))
-             (if (cover/data/data d1 d2)
-               (gs/next)
-               #f))])))
-
-;; (define gsp-proto
-;;   (list
-;;    (cons 'c   '())
-;;    (cons 'ex  '())
-;;    (cons 'end '())
-;;    (cons 'dl1 '())
-;;    (cons 'dl2 '())))
-
-;; (@ 'copy gsp-proto
-;;    'c 0
-;;    'ex
-;;    'end
-;;    'dl1
-;;    'dl2)
 
 (define (cover/data/data d1 d2)
   (: data data -> bool)
@@ -559,29 +523,41 @@
 (define (compose/jo j)
   (case (car j)
     ['var           (compose/var j)]
+    ['fvar          (compose/var j)]
     ['bind          (compose/bind j)]
     ['call          (compose/call j)]
-    ['apply         (compose/apply j)]
-    [__             (push ds j)]))
+    ['arrow         (compose/arrow j)]
+    ['lambda        (compose/lambda j)]
+    ['apply         (compose/apply j)]))
 
 (define (compose/var j)
   ;; (if (var/fresh? j)
   ;;   (bs/extend-new j))
-  (let* ([uv (v->uv j)]
+  (let* ([n (match j
+              [{'var n} n]
+              [{'fvar n} n])]
+         [uv (name->uni-var n)]
          [d (bs/deep uv)])
     (push ds d)))
 
-(define (type/input-number t)
-  (match t
-    [{'arrow ajj sjj}
-     (length (call-with-output-to-new-ds
-              (lambda () (for-each compose/jo ajj))))]))
+(define (compose/bind j)
+  (match j
+    [{'bind n}
+     (let* ([uv (name->uni-var n)]
+            [d (pop ds)])
+       (bs/extend-up uv d)
+       (push ds {'uni-bind uv d}))]))
 
-(define (type/output-number t)
-  (match t
-    [{'arrow ajj sjj}
-     (length (call-with-output-to-new-ds
-              (lambda () (for-each compose/jo sjj))))]))
+(: [for the first covering arrow]
+   <data-on-the-stack>
+   <point>
+   (push rs {compose exit <antecedent>})
+   <ds/gather>
+   (push gs {cover commit <gathered>})
+   succ -> commit (<loop>)
+   fail -> undo
+   (push rs {compose exit <succedent>})
+   all fail -> form trunk)
 
 (define (compose/call j)
   (match j
@@ -650,28 +626,30 @@
      (map (lambda (i) {'trunk t k i})
        (genlist (type/output-number pt))))))
 
+(define (type/input-number t)
+  (match t
+    [{'arrow ajj sjj}
+     (length (call-with-output-to-new-ds
+              (lambda () (for-each compose/jo ajj))))]))
+
+(define (type/output-number t)
+  (match t
+    [{'arrow ajj sjj}
+     (length (call-with-output-to-new-ds
+              (lambda () (for-each compose/jo sjj))))]))
+
+(define (compose/arrow j)
+  (push ds j))
+
+(define (compose/lambda j)
+  (push ds j))
+
 (define (compose/apply j)
   (match (bs/walk (pop ds))
     [{'lambda t b}
      (compose/function t b)]
     [__ (orz 'compose/apply
           ("can not handle jo : ~a~%" j))]))
-
-(define (compose/bind j)
-  (match j
-    [{'bind j vl}
-     (let* ([dl (call-with-output-to-new-ds
-                 (lambda ()
-                   (compose/jo j)))]
-            [d (car dl)])
-       (if (not (eq? (length dl) 1))
-         (orz 'compose/bind
-           ("jo should return one data~%")
-           ("but this jo does not : ~a~%" j))
-         (for-each (lambda (v)
-                     (bs/extend-up v d)
-                     (push ds {'bind d v}))
-                   vl)))]))
 
 (define (cut)
   (let* ([rsp (pop rs)]
@@ -688,6 +666,7 @@
 (define (cut/jo j)
   (case (car j)
     ['var           (cut/var j)]
+    ['fvar          (cut/var j)]
     ['bind          (cut/bind j)]
     ['call          (cut/call j)]
     ['apply         (cut/apply j)]
@@ -697,7 +676,10 @@
 (define (cut/var j)
   ;; (if (var/fresh? j)
   ;;   (bs/extend-new j))
-  (let* ([uv (v->uv j)]
+  (let* ([n (match j
+              [{'var n} n]
+              [{'fvar n} n])]
+         [uv (name->uni-var n)]
          [d (bs/deep uv)])
     (let ([found-d (bs/find-up uv)])
       (if found-d
@@ -705,6 +687,11 @@
         (match uv
           [{'uni-var id level}
            (push ds {'uni-var id (+ 1 level)})])))))
+
+(define (cut/bind j)
+  (orz 'cut/bind
+    ("can not handle bind as jo that is not in type~%")
+    ("jo : ~a~%" j)))
 
 (define (cut/call j)
   (match j
@@ -743,13 +730,6 @@
             [(orz 'cut/type
                ("fail on unify~%"))]))]))
 
-(define (cut/apply j)
-  (match (bs/walk (pop ds))
-    [{'arrow ajj sjj}
-     (cut/type {'arrow ajj sjj})]
-    [__ (orz 'cut/apply
-          ("can not handle jo : ~a~%" j))]))
-
 (define (cut/arrow j)
   (orz 'cut/arrow
     ("can not handle arrow as jo that is not in type~%")
@@ -764,10 +744,12 @@
        ("can not handle jo : ~a~%" j)
        ("for it is meaning less to write a lambda without local-vars~%"))]))
 
-(define (cut/bind j)
-  (orz 'cut/bind
-    ("can not handle bind as jo that is not in type~%")
-    ("jo : ~a~%" j)))
+(define (cut/apply j)
+  (match (bs/walk (pop ds))
+    [{'arrow ajj sjj}
+     (cut/type {'arrow ajj sjj})]
+    [__ (orz 'cut/apply
+          ("can not handle jo : ~a~%" j))]))
 
 (define print-define-flag #f)
 (define (print-define+) (set! print-define-flag #t))

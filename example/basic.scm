@@ -18,29 +18,6 @@
     (-> [zero] [zero succ])
     (-> [:n succ] [:n factorial :n succ mul])))
 
-(run zero succ
-     zero succ succ
-     add)
-
-(run zero succ succ
-     zero succ succ
-     mul)
-
-(run zero succ succ succ
-     factorial)
-
-(def nat-induction
-  (lambda (-> [(-> [nat] [type]) %:p
-               zero :p @
-               (-> [nat %:k :k :p @]
-                   [:k succ :p @])
-               nat %:x]
-              [:x :p @])
-    (-> [:p :p/z :p/s zero] [:p/z])
-    (-> [:p :p/z :p/s :n succ]
-        [:n
-         :p :p/z :p/s :n nat-induction
-         :p/s @])))
 
 (def drop
   (lambda (-> [:t] [])
@@ -67,11 +44,38 @@
     (-> [:d1 :d2]
         [:d2 :d1])))
 
-(run zero
-     zero succ
-     swap
-     drop
-     dup)
+
+(run zero succ
+     zero succ succ
+     add)
+
+(run drop)
+
+(run zero succ succ succ
+     zero succ succ succ
+     mul)
+
+(run drop)
+
+(run zero succ succ succ
+     factorial)
+
+(run drop)
+
+
+(def nat-induction
+  (lambda (-> [(-> [nat] [type]) %:p
+               zero :p @
+               (-> [nat %:k :k :p @]
+                   [:k succ :p @])
+               nat %:x]
+              [:x :p @])
+    (-> [:p :p/z :p/s zero] [:p/z])
+    (-> [:p :p/z :p/s :n succ]
+        [:n
+         :p :p/z :p/s :n nat-induction
+         :p/s @])))
+
 
 (def list
   (type (-> [type] [type])
@@ -87,6 +91,8 @@
   (lambda (-> [:t list] [nat])
     (-> [null] [zero])
     (-> [:l :e cons] [:l length succ])))
+
+(run null zero cons)
 
 (run null
      zero cons

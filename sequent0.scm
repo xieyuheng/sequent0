@@ -34,20 +34,35 @@
    done               {data ...})
 
 (define-macro (push s v) `(set! ,s (cons ,v ,s)))
+
 (define-macro (push-list s l)
   `(set! ,s (append ,l ,s)))
 
-(define (tos s) (car s))
+(define-macro (tos s)
+  `(if (null? ,s)
+     (orz 'tos
+       ("stack is empty : ~a~%" (quote ,s)))
+     (car ,s)))
+
 (define-macro (pop s)
   (let ([v (gensym "pop/v")])
-    `(let ([,v (car ,s)])
-       (set! ,s (cdr ,s))
-       ,v)))
+    `(if (null? ,s)
+       (orz 'pop
+         ("stack is empty : ~a~%" (quote ,s)))
+       (let ([,v (car ,s)])
+         (set! ,s (cdr ,s))
+         ,v))))
+
 (define-macro (pop-list s n)
   (let ([v (gensym "fetch/v")])
-    `(let ([,v (take ,s ,n)])
-       (set! ,s (drop ,s ,n))
-       ,v)))
+    `(if (< (length ,s) ,n)
+       (orz 'pop-list
+         ("stack is not long enough : ~a~%" (quote ,s))
+         ("stack length : ~a~%" (length ,s))
+         ("need length : ~a~%" ,n))
+       (let ([,v (take ,s ,n)])
+         (set! ,s (drop ,s ,n))
+         ,v))))
 
 ;; name-stack
 (define ns '())
@@ -406,14 +421,14 @@
        (if (not found)
          (orz 'compose/call ("unknow name : ~a~%" n))
          (match (cdr found)
-           [{'meaning-type pt n nl}
-            (let ([len (type/input-number pt)])
+           [{'meaning-type a n nl}
+            (let ([len (type/input-number a)])
               (push ds {'cons n (pop-list ds len)}))]
-           [{'meaning-data pt n n0}
-            (let ([len (type/input-number pt)])
+           [{'meaning-data a n n0}
+            (let ([len (type/input-number a)])
               (push ds {'cons n (pop-list ds len)}))]
-           [{'meaning-lambda pt pb}
-            (compose/function pt pb)])))]))
+           [{'meaning-lambda a al}
+            (compose/body a al)])))]))
 
 (: [for the first covering arrow]
    <data-on-the-stack>
@@ -426,7 +441,7 @@
    (push rs {compose exit <succedent>})
    all fail -> form trunk)
 
-(define (compose/function t b)
+(define (compose/body t b)
   ;; note that
   ;;   when create-trunk-list
   ;;   it needs to know the type to get input-number & output-number
@@ -503,7 +518,7 @@
 (define (compose/apply j)
   (match (bs/walk (pop ds))
     [{'uni-lambda t b}
-     (compose/function t b)]
+     (compose/body t b)]
     [__ (orz 'compose/apply
           ("can not handle jo : ~a~%" j))]))
 
@@ -525,9 +540,9 @@
     ['fvar          (cut/var j)]
     ['bind          (cut/bind j)]
     ['call          (cut/call j)]
-    ['apply         (cut/apply j)]
     ['arrow         (cut/arrow j)]
-    ['lambda        (cut/lambda j)]))
+    ['lambda        (cut/lambda j)]
+    ['apply         (cut/apply j)]))
 
 (define (cut/var j)
   ;; (if (uni-var/fresh? j)
@@ -546,32 +561,31 @@
 
 (define (cut/bind j)
   (orz 'cut/bind
-    ("can not handle bind as jo that is not in type~%")
-    ("jo : ~a~%" j)))
+    ("bind can not occur in type-arrow~%")
+    ("bind : ~a~%" j)))
 
 (define (cut/call j)
   (match j
     [{'call n}
      (let ([found (assq n ns)])
        (if (not found)
-         (orz 'cut/call ("unknow name : ~a~%" n))
+         (orz 'cut/call
+           ("unknow name : ~a~%" n))
          (match (cdr found)
-           [{'meaning-type a n nl}
-            (cut/type a)]
-           [{'meaning-data a n n0}
-            (cut/type a)]
-           [{'meaning-lambda a al}
-            (cut/type a)])))]))
+           [{'meaning-type a n nl} (cut/type a)]
+           [{'meaning-data a n n0} (cut/type a)]
+           [{'meaning-lambda a al} (cut/type a)])))]))
 
 (define (cut/type a)
-  (: arrow -> !)
   (match a
-    [{'arrow vnl fvnl ajj sjj}
-     (let* ([dl1 (call-with-output-to-new-ds
+    [{'arrow nl fnl ajj sjj}
+     (let* ([vrc (nl->vrc nl)]
+            [dl1 (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
                                 'ex   compose
                                 'end  rs/exit
+                                'vrc  vrc
                                 'jj   ajj))
                     (rs/next)))]
             [dl2 (pop-list ds (length dl1))])
@@ -588,21 +602,13 @@
 
 (define (cut/arrow j)
   (orz 'cut/arrow
-    ("can not handle arrow as jo that is not in type~%")
-    ("jo : ~a~%" j)))
-
-;; (define (cut/lambda j)
-;;   (match j
-;;     [{'lambda {'arrow vnl fvnl ajj sjj} b}
-;;      (push ds {'arrow vnl fvnl ajj sjj})]
-;;     [__
-;;      (orz 'cut/lambda
-;;        ("can not handle jo : ~a~%" j)
-;;        ("for it is meaning less to write a lambda without local-vars~%"))]))
+    ("arrow can not occur in type-arrow~%")
+    ("arrow : ~a~%" j)))
 
 (define (cut/lambda j)
-  (orz 'cut/lambda
-    ("can not handle jo : ~a~%" j)))
+  (match j
+    [{'lambda a al}
+     (compose/arrow a)]))
 
 (define (cut/apply j)
   (match (bs/walk (pop ds))
@@ -841,7 +847,7 @@
        [{'done dl} (list-ref dl i)]
        [{'todo b dl}
         (push-list ds dl)
-        (compose/function t b)
+        (compose/body t b)
         (let ([result (pop ds)])
           (cond [(equal? result t) #f]
                 [else result]))])]))
@@ -959,7 +965,19 @@
   `($run (quote ,s)))
 
 (define ($run s)
-  (for-each compose/jo (map compile-jo s)))
+  (for-each compose/jo (map compile-jo s))
+  (print-ds))
+
+(define (print-ds)
+  (display ds)
+  (newline)
+  (newline))
+
+(define (print-env)
+  (cat ("ds :: ~a~%" ds)
+       ("rs :: ~a~%" rs)
+       ("bs :: ~a~%" bs)
+       ("gs :: ~a~%" gs)))
 
 (define (type-check ta al)
   (: arrow {arrow ...} -> bool)

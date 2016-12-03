@@ -76,6 +76,8 @@
          :p :p/z :p/s :n nat-induction
          :p/s @])))
 
+(def type
+  (type (-> [] [type])))
 
 (def list
   (type (-> [type] [type])

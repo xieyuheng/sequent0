@@ -499,15 +499,27 @@
 
 (define (type/input-number t)
   (match t
-    [{'arrow vnl fvnl ajj sjj}
+    [{'arrow nl fnl ajj sjj}
      (length (call-with-output-to-new-ds
-              (lambda () (for-each compose/jo ajj))))]))
+              (lambda ()
+                (push rs (% rsp-proto
+                            'ex   compose
+                            'end  rs/exit
+                            'vrc  (nl->vrc nl)
+                            'jj  ajj))
+                (rs/next))))]))
 
 (define (type/output-number t)
   (match t
-    [{'arrow vnl fvnl ajj sjj}
+    [{'arrow nl fnl ajj sjj}
      (length (call-with-output-to-new-ds
-              (lambda () (for-each compose/jo sjj))))]))
+              (lambda ()
+                (push rs (% rsp-proto
+                            'ex   compose
+                            'end  rs/exit
+                            'vrc  (nl->vrc nl)
+                            'jj  sjj))
+                (rs/next))))]))
 
 (define (compose/arrow j)
   (push ds j))
@@ -596,7 +608,12 @@
                          'dl+  dl1
                          'dl-  dl2))
              (gs/next)]
-            [(for-each compose/jo sjj)]
+            [(push rs (% rsp-proto
+                         'ex   compose
+                         'end  rs/exit
+                         'vrc  vrc
+                         'jj  sjj))
+             (rs/next)]
             [(orz 'cut/type
                ("fail on unify~%"))]))]))
 

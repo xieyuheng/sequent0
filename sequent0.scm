@@ -68,6 +68,11 @@
 (define ns '())
 (: ns {(name . meaning) ...})
 
+(: meaning
+   meaning-type       uni-arrow name {name ...}
+   meaning-data       uni-arrow name name
+   meaning-lambda     uni-arrow {uni-arrow ...})
+
 (define id/counter 0)
 
 ;; (define (id/new n ls)
@@ -94,6 +99,16 @@
 
 (define (compile-arrow a)
   (pass2-arrow (pass1-arrow a)))
+
+(define (compile-uni-arrow a)
+  (match (compile-arrow a)
+    [{'arrow nl fnl ajj sjj}
+     (if (null? fnl)
+       {'uni-arrow nl '() ajj sjj}
+       (orz 'compile-uni-arrow
+         ("the free-var-name-list of arrow is not empty~%")
+         ("free-var-name-list : ~a~%" fnl)
+         ("arrow : ~a~%" a)))]))
 
 (define (compile-jo j)
   (pass2-jo (pass1-jo j)))
@@ -466,7 +481,7 @@
   ;; return sjj on success with commit
   (match b
     [{} #f]
-    [({'arrow nl fnl ajj sjj} . r)
+    [({'uni-arrow nl fnl ajj sjj} . r)
      (let* ([vrc (nl->vrc nl)]
             [ds0 ds]
             [bs0 bs]
@@ -501,7 +516,7 @@
 
 (define (type/input-number t)
   (match t
-    [{'arrow nl fnl ajj sjj}
+    [{'uni-arrow nl fnl ajj sjj}
      (length (call-with-output-to-new-ds
               (lambda ()
                 (push rs (% rsp-proto
@@ -513,7 +528,7 @@
 
 (define (type/output-number t)
   (match t
-    [{'arrow nl fnl ajj sjj}
+    [{'uni-arrow nl fnl ajj sjj}
      (length (call-with-output-to-new-ds
               (lambda ()
                 (push rs (% rsp-proto
@@ -604,7 +619,7 @@
 
 (define (cut/type a)
   (match a
-    [{'arrow nl fnl ajj sjj}
+    [{'uni-arrow nl fnl ajj sjj}
      (let* ([vrc (nl->vrc nl)]
             [dl1 (call-with-output-to-new-ds
                   (lambda ()
@@ -943,8 +958,8 @@
         ("can not find key : ~a~%" key)))))
 
 (define (def-lambda n body)
-  (let* ([a (compile-arrow (cadr body))]
-         [al (map compile-arrow (cddr body))]
+  (let* ([a (compile-uni-arrow (cadr body))]
+         [al (map compile-uni-arrow (cddr body))]
          [meaning (list 'meaning-lambda a al)])
     (push ns (cons n meaning))
     (if type-check-flag
@@ -962,7 +977,7 @@
 (new-key 'lambda def-lambda)
 
 (define (def-type n body)
-  (let* ([a (compile-arrow (cadr body))]
+  (let* ([a (compile-uni-arrow (cadr body))]
          [pl (apply pair-list (cddr body))]
          [nl (map car pl)]
          [meaning (list 'meaning-type a n nl)])
@@ -983,7 +998,7 @@
 
 (define (def-data n0 p)
   (let* ([n (car p)]
-         [a (compile-arrow (cdr p))]
+         [a (compile-uni-arrow (cdr p))]
          [meaning (list 'meaning-data a n n0)])
     (push ns (cons n meaning))
     (if print-define-flag

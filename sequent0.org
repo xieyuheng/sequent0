@@ -3,17 +3,15 @@
 
 * todo
 
-  - maybe refactor compose/body & cut/type toward apply
-
-  - when generate vrc by (nl->vrc nl)
-    only nl is used
-    fnl is not used
-
   - when return arrow & lambda
     arrow->uni-arrow generate new frc
     the following functions call arrow->uni-arrow
     compose/arrow & compose/lambda
     cut/lambda
+
+  - when generate vrc by (nl->vrc nl)
+    only nl is used
+    fnl is not used
 
 * note
 
@@ -138,11 +136,11 @@
 
 *** meaning
 
-    #+begin_src scheme :tangle no
+    #+begin_src scheme
     (: meaning
-       meaning-type       arrow name {name ...}
-       meaning-data       arrow name name
-       meaning-lambda     arrow {arrow ...})
+       meaning-type       uni-arrow name {name ...}
+       meaning-data       uni-arrow name name
+       meaning-lambda     uni-arrow {uni-arrow ...})
     #+end_src
 
 *** id/new
@@ -194,6 +192,20 @@
       #+begin_src scheme
       (define (compile-arrow a)
         (pass2-arrow (pass1-arrow a)))
+      #+end_src
+
+***** compile-uni-arrow
+
+      #+begin_src scheme
+      (define (compile-uni-arrow a)
+        (match (compile-arrow a)
+          [{'arrow nl fnl ajj sjj}
+           (if (null? fnl)
+             {'uni-arrow nl '() ajj sjj}
+             (orz 'compile-uni-arrow
+               ("the free-var-name-list of arrow is not empty~%")
+               ("free-var-name-list : ~a~%" fnl)
+               ("arrow : ~a~%" a)))]))
       #+end_src
 
 ***** compile-jo
@@ -635,112 +647,112 @@
 
 ***** compose/body
 
-      #+begin_src scheme
-      (: [for the first covering arrow]
-         <data-on-the-stack>
-         <point>
-         (push rs {compose exit <antecedent>})
-         <ds/gather>
-         (push gs {cover commit <gathered>})
-         succ -> commit (<loop>)
-         fail -> undo
-         (push rs {compose exit <succedent>})
-         all fail -> form trunk)
+******* compose/body
 
-      (define (compose/body t b)
-        ;; note that
-        ;;   when create-trunk-list
-        ;;   it needs to know the type to get input-number & output-number
-        (match (compose/try-body b)
-          [{sjj vrc}
-           (if3 [sjj]
-                [(push rs (% rsp-proto
-                             'ex   compose
-                             'end  rs/exit
-                             'vrc  vrc
-                             'jj   sjj))
-                 (rs/next)]
-                [(push-list ds
-                  (create-trunk-list t b
-                   (pop-list ds (type/input-number t))))])]))
-      #+end_src
+        #+begin_src scheme
+        (: [for the first covering arrow]
+           <data-on-the-stack>
+           <point>
+           (push rs {compose exit <antecedent>})
+           <ds/gather>
+           (push gs {cover commit <gathered>})
+           succ -> commit (<loop>)
+           fail -> undo
+           (push rs {compose exit <succedent>})
+           all fail -> form trunk)
 
-***** compose/try-body
+        (define (compose/body t b)
+          ;; note that
+          ;;   when create-trunk-list
+          ;;   it needs to know the type to get input-number & output-number
+          (match (compose/try-body b)
+            [{sjj vrc}
+             (if3 [sjj]
+                  [(push rs (% rsp-proto
+                               'ex   compose
+                               'end  rs/exit
+                               'vrc  vrc
+                               'jj   sjj))
+                   (rs/next)]
+                  [(push-list ds
+                    (create-trunk-list t b
+                     (pop-list ds (type/input-number t))))])]))
+        #+end_src
 
-      #+begin_src scheme
-      (define (compose/try-body b)
-        (: body -> (or #f {sjj vrc}))
-        ;; return #f on fail
-        ;; return sjj on success with commit
-        (match b
-          [{} #f]
-          [({'arrow nl fnl ajj sjj} . r)
-           (let* ([vrc (nl->vrc nl)]
-                  [ds0 ds]
-                  [bs0 bs]
-                  [gs0 gs])
-             (let* ([dl1 (call-with-output-to-new-ds
-                          (lambda ()
-                            (push rs (% rsp-proto
-                                        'ex   compose
-                                        'end  rs/exit
-                                        'vrc  vrc
-                                        'jj   ajj))
-                            (rs/next)))]
-                    [dl2 (pop-list ds (length dl1))])
-               (if3 [(push bs '(commit-point))
-                     (push gs (% gsp-proto
-                                 'ex   cover
-                                 'end  bs/commit
-                                 'dl+  dl1
-                                 'dl-  dl2))
-                     (gs/next)]
-                    [{sjj vrc}]
-                    [(set! ds ds0)
-                     (set! bs bs0)
-                     (set! gs gs0)
-                     (compose/try-body r)])))]))
-      #+end_src
+******* compose/try-body
 
-***** create-trunk-list
+        #+begin_src scheme
+        (define (compose/try-body b)
+          (: body -> (or #f {sjj vrc}))
+          ;; return #f on fail
+          ;; return sjj on success with commit
+          (match b
+            [{} #f]
+            [({'uni-arrow nl fnl ajj sjj} . r)
+             (let* ([vrc (nl->vrc nl)]
+                    [ds0 ds]
+                    [bs0 bs]
+                    [gs0 gs])
+               (let* ([dl1 (call-with-output-to-new-ds
+                            (lambda ()
+                              (push rs (% rsp-proto
+                                          'ex   compose
+                                          'end  rs/exit
+                                          'vrc  vrc
+                                          'jj   ajj))
+                              (rs/next)))]
+                      [dl2 (pop-list ds (length dl1))])
+                 (if3 [(push bs '(commit-point))
+                       (push gs (% gsp-proto
+                                   'ex   cover
+                                   'end  bs/commit
+                                   'dl+  dl1
+                                   'dl-  dl2))
+                       (gs/next)]
+                      [{sjj vrc}]
+                      [(set! ds ds0)
+                       (set! bs bs0)
+                       (set! gs gs0)
+                       (compose/try-body r)])))]))
+        #+end_src
 
-      #+begin_src scheme
-      (define (create-trunk-list t b dl)
-        (let ([k (vector {'todo b dl})])
-          (reverse
-           (map (lambda (i) {'trunk t k i})
-             (genlist (type/output-number pt))))))
-      #+end_src
+******* create-trunk-list
 
-***** type/input-number & type/output-number
+        #+begin_src scheme
+        (define (create-trunk-list t b dl)
+          (let ([k (vector {'todo b dl})])
+            (reverse
+             (map (lambda (i) {'trunk t k i})
+               (genlist (type/output-number pt))))))
+        #+end_src
 
-      - it is assumed that jojo as type do not eat data-stack
+******* type/input-number & type/output-number
 
-      #+begin_src scheme
-      (define (type/input-number t)
-        (match t
-          [{'arrow nl fnl ajj sjj}
-           (length (call-with-output-to-new-ds
-                    (lambda ()
-                      (push rs (% rsp-proto
-                                  'ex   compose
-                                  'end  rs/exit
-                                  'vrc  (nl->vrc nl)
-                                  'jj  ajj))
-                      (rs/next))))]))
+        #+begin_src scheme
+        (define (type/input-number t)
+          (match t
+            [{'uni-arrow nl fnl ajj sjj}
+             (length (call-with-output-to-new-ds
+                      (lambda ()
+                        (push rs (% rsp-proto
+                                    'ex   compose
+                                    'end  rs/exit
+                                    'vrc  (nl->vrc nl)
+                                    'jj  ajj))
+                        (rs/next))))]))
 
-      (define (type/output-number t)
-        (match t
-          [{'arrow nl fnl ajj sjj}
-           (length (call-with-output-to-new-ds
-                    (lambda ()
-                      (push rs (% rsp-proto
-                                  'ex   compose
-                                  'end  rs/exit
-                                  'vrc  (nl->vrc nl)
-                                  'jj  sjj))
-                      (rs/next))))]))
-      #+end_src
+        (define (type/output-number t)
+          (match t
+            [{'uni-arrow nl fnl ajj sjj}
+             (length (call-with-output-to-new-ds
+                      (lambda ()
+                        (push rs (% rsp-proto
+                                    'ex   compose
+                                    'end  rs/exit
+                                    'vrc  (nl->vrc nl)
+                                    'jj  sjj))
+                        (rs/next))))]))
+        #+end_src
 
 ***** ><>< arrow->uni-arrow
 
@@ -866,7 +878,7 @@
       #+begin_src scheme
       (define (cut/type a)
         (match a
-          [{'arrow nl fnl ajj sjj}
+          [{'uni-arrow nl fnl ajj sjj}
            (let* ([vrc (nl->vrc nl)]
                   [dl1 (call-with-output-to-new-ds
                         (lambda ()
@@ -1346,8 +1358,8 @@
 
       #+begin_src scheme
       (define (def-lambda n body)
-        (let* ([a (compile-arrow (cadr body))]
-               [al (map compile-arrow (cddr body))]
+        (let* ([a (compile-uni-arrow (cadr body))]
+               [al (map compile-uni-arrow (cddr body))]
                [meaning (list 'meaning-lambda a al)])
           (push ns (cons n meaning))
           (if type-check-flag
@@ -1371,7 +1383,7 @@
 
       #+begin_src scheme
       (define (def-type n body)
-        (let* ([a (compile-arrow (cadr body))]
+        (let* ([a (compile-uni-arrow (cadr body))]
                [pl (apply pair-list (cddr body))]
                [nl (map car pl)]
                [meaning (list 'meaning-type a n nl)])
@@ -1392,7 +1404,7 @@
 
       (define (def-data n0 p)
         (let* ([n (car p)]
-               [a (compile-arrow (cdr p))]
+               [a (compile-uni-arrow (cdr p))]
                [meaning (list 'meaning-data a n n0)])
           (push ns (cons n meaning))
           (if print-define-flag

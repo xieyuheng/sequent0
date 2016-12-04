@@ -63,18 +63,18 @@
 (run drop)
 
 
-(def nat-induction
-  (lambda (-> [(-> [nat] [type]) %:p
-               zero :p @
-               (-> [nat %:k :k :p @]
-                   [:k succ :p @])
-               nat %:x]
-              [:x :p @])
-    (-> [:p :p/z :p/s zero] [:p/z])
-    (-> [:p :p/z :p/s :n succ]
-        [:n
-         :p :p/z :p/s :n nat-induction
-         :p/s @])))
+;; (def nat-induction
+;;   (lambda (-> [(-> [nat] [type]) %:p
+;;                zero :p @
+;;                (-> [nat %:k :k :p @]
+;;                    [:k succ :p @])
+;;                nat %:x]
+;;               [:x :p @])
+;;     (-> [:p :p/z :p/s zero] [:p/z])
+;;     (-> [:p :p/z :p/s :n succ]
+;;         [:n
+;;          :p :p/z :p/s :n nat-induction
+;;          :p/s @])))
 
 (def type
   (type (-> [] [type])))
@@ -126,21 +126,26 @@
 (run null
      zero cons
      zero cons
+     (lambda (-> [nat] [nat])
+       (-> [zero] [zero succ]))
+     map)
+
+(run drop)
+
+(run null
+     zero cons
+     zero cons
      zero cons
      null
      zero cons
      zero cons
      zero cons
      append
-     (-> [zero] [zero succ])
-     map)
-
-(run null
-     zero cons
-     zero cons
      (lambda (-> [nat] [nat])
        (-> [zero] [zero succ]))
      map)
+
+(run drop)
 
 (def has-length
   (type (-> [:t list nat] [type])
@@ -177,6 +182,7 @@
      zero cons
      append)
 
+(run drop)
 
 (def map
   (lambda (-> [:n :t1 vector (-> [:t1] [:t2])]
@@ -193,5 +199,8 @@
      zero cons
      zero cons
      append
-     (-> [zero] [zero succ])
+     (lambda (-> [nat] [nat])
+       (-> [zero] [zero succ]))
      map)
+
+(run drop)

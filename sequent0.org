@@ -3,17 +3,17 @@
 
 * todo
 
-  - compose/arrow & compose/lambda
-
-  - fix cut/type
+  - maybe refactor compose/body & cut/type toward apply
 
   - when generate vrc by (nl->vrc nl)
     only nl is used
     fnl is not used
 
-  - return arrow & lambda
-    in compose/arrow & compose/lambda
-    in cut/arrow & cut/lambda
+  - when return arrow & lambda
+    arrow->uni-arrow generate new frc
+    the following functions call arrow->uni-arrow
+    compose/arrow & compose/lambda
+    cut/lambda
 
 * note
 
@@ -24,6 +24,10 @@
     - type-infer is needed to handle cut/arrow
       and we need a new data for this
       thus maybe we do not literal arrow in this version
+
+    - lambda & arrow found from top-level name
+      are uni-lambda & uni-arrow indeed
+      they just have empty frc [free-var-record]
 
 *** terminology
 
@@ -738,18 +742,32 @@
                       (rs/next))))]))
       #+end_src
 
-***** ><>< compose/arrow
+***** ><>< arrow->uni-arrow
+
+      - ><><>< 先不處理 fvar
+
+      #+begin_src scheme
+      (define (arrow->uni-arrow a)
+        (match a
+          [{'arrow nl fnl ajj sjj}
+           {'uni-arrow nl fnl ajj sjj}]))
+      #+end_src
+
+***** compose/arrow
 
       #+begin_src scheme
       (define (compose/arrow j)
-        (push ds j))
+        (push ds (arrow->uni-arrow a)))
       #+end_src
 
-***** ><>< compose/lambda
+***** compose/lambda
 
       #+begin_src scheme
       (define (compose/lambda j)
-        (push ds j))
+        (match j
+          [{'lambda a al}
+           (push ds {'uni-lambda (arrow->uni-arrow a)
+                                 (map arrow->uni-arrow al)})]))
       #+end_src
 
 ***** compose/apply
@@ -760,8 +778,11 @@
           (match d
             [{'uni-lambda t b}
              (compose/body t b)]
-            [__ (orz 'compose/apply
-                  ("can not apply data : ~a~%" d))])))
+            [__
+             (orz 'compose/apply
+               ("compose/apply can not apply data~%")
+               ("data : ~a~%" d)
+               ("jo : ~a~%" j))])))
       #+end_src
 
 *** cut
@@ -893,15 +914,19 @@
            (compose/arrow a)]))
       #+end_src
 
-***** cut/apply
+***** ><>< cut/apply
 
       #+begin_src scheme
       (define (cut/apply j)
-        (match (bs/walk (pop ds))
-          [{'arrow vnl fvnl ajj sjj}
-           (cut/type {'arrow vnl fvnl ajj sjj})]
-          [__ (orz 'cut/apply
-                ("can not handle jo : ~a~%" j))]))
+        (let ([d (bs/walk (pop ds))])
+          (match d
+            [{'uni-arrow vnl fvnl ajj sjj}
+             (cut/type {'arrow vnl fvnl ajj sjj})]
+            [__
+             (orz 'cut/apply
+               ("cut/apply can not apply data~%")
+               ("data : ~a~%" d)
+               ("jo : ~a~%" j))])))
       #+end_src
 
 * gs

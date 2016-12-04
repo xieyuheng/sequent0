@@ -523,19 +523,30 @@
                             'jj  sjj))
                 (rs/next))))]))
 
+(define (arrow->uni-arrow a)
+  (match a
+    [{'arrow nl fnl ajj sjj}
+     {'uni-arrow nl fnl ajj sjj}]))
+
 (define (compose/arrow j)
-  (push ds j))
+  (push ds (arrow->uni-arrow a)))
 
 (define (compose/lambda j)
-  (push ds j))
+  (match j
+    [{'lambda a al}
+     (push ds {'uni-lambda (arrow->uni-arrow a)
+                           (map arrow->uni-arrow al)})]))
 
 (define (compose/apply j)
   (let ([d (bs/walk (pop ds))])
     (match d
       [{'uni-lambda t b}
        (compose/body t b)]
-      [__ (orz 'compose/apply
-            ("can not apply data : ~a~%" d))])))
+      [__
+       (orz 'compose/apply
+         ("compose/apply can not apply data~%")
+         ("data : ~a~%" d)
+         ("jo : ~a~%" j))])))
 
 (define (cut)
   (let* ([rsp (pop rs)]
@@ -631,11 +642,15 @@
      (compose/arrow a)]))
 
 (define (cut/apply j)
-  (match (bs/walk (pop ds))
-    [{'arrow vnl fvnl ajj sjj}
-     (cut/type {'arrow vnl fvnl ajj sjj})]
-    [__ (orz 'cut/apply
-          ("can not handle jo : ~a~%" j))]))
+  (let ([d (bs/walk (pop ds))])
+    (match d
+      [{'uni-arrow vnl fvnl ajj sjj}
+       (cut/type {'arrow vnl fvnl ajj sjj})]
+      [__
+       (orz 'cut/apply
+         ("cut/apply can not apply data~%")
+         ("data : ~a~%" d)
+         ("jo : ~a~%" j))])))
 
 ;; goal-stack
 ;;   binding-stack is to record solution of equations in goal-stack

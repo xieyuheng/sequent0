@@ -131,7 +131,9 @@
         [(apply? jo)              (list 'apply)]
         [(call? jo)               (list 'call jo)]
         [(arrow? jo)              (pass1-arrow jo)]
-        [(lambda? jo)             (list 'lambda (map pass1-arrow (cdr l)))]))
+        [(lambda? jo)             (list 'lambda
+                                        (pass1-arrow (car (cdr jo)))
+                                        (map pass1-arrow (cdr (cdr jo))))]))
 
 (define (pass1-arrow a)
   (match a
@@ -141,7 +143,7 @@
 (define (pass2-jo jo)
   (match jo
     [{'arrow ac sc} (pass2-arrow jo)]
-    [{'lambda al} {'lambda (map pass2-arrow al)}]
+    [{'lambda a al} {'lambda (pass2-arrow a) (map pass2-arrow al)}]
     [__ jo]))
 
 (define (pass2-arrow a)
@@ -164,7 +166,7 @@
       [{'call n}        vl]
       [{'apply}         vl]
       [{'arrow ac sc}   (loop vl (append ac sc))]
-      [{'lambda al}     (arrow-loop vl al)]))
+      [{'lambda a al}   (arrow-loop vl (cons a al))]))
   (define (arrow-loop vl l)
     (if (null? l)
       vl
@@ -190,7 +192,7 @@
       [{'call n}        vl]
       [{'apply}         vl]
       [{'arrow ac sc}   (loop vl (append ac sc))]
-      [{'lambda al}     (arrow-loop vl al)]))
+      [{'lambda a al}   (arrow-loop vl (cons a al))]))
   (define (arrow-loop vl l)
     (if (null? l)
       vl
@@ -528,11 +530,12 @@
   (push ds j))
 
 (define (compose/apply j)
-  (match (bs/walk (pop ds))
-    [{'uni-lambda t b}
-     (compose/body t b)]
-    [__ (orz 'compose/apply
-          ("can not handle jo : ~a~%" j))]))
+  (let ([d (bs/walk (pop ds))])
+    (match d
+      [{'uni-lambda t b}
+       (compose/body t b)]
+      [__ (orz 'compose/apply
+            ("can not apply data : ~a~%" d))])))
 
 (define (cut)
   (let* ([rsp (pop rs)]
@@ -985,14 +988,33 @@
   (for-each compose/jo (map compile-jo s))
   (print-ds))
 
+(define (print-data d)
+  (match d
+    [('uni-var . __)
+     (cat ("~a " d))]
+    [('uni-bind)
+     (cat ("~a " d))]
+    [{'cons n dl}
+     (if3 [(null? dl)]
+          [(cat ("~a " n))]
+          [(cat ("[ ~a " n))
+           (map print-data dl)
+           (cat ("] "))])]
+    [('uni-arrow . __)
+     (cat ("~a " d))]
+    [('uni-lambda . __)
+     (cat ("~a " d))]
+    [('trunk . __)
+     (cat ("~a " d))]))
+
 (define (print-ds)
-  (display ds)
-  (newline)
-  (newline))
+  (map print-data ds)
+  (display "\n")
+  (void))
 
 (define (print-env)
-  (cat ("ds :: ~a~%" ds)
-       ("rs :: ~a~%" rs)
+  (cat ("ds :: ")) (print-ds) (cat ("~%"))
+  (cat ("rs :: ~a~%" rs)
        ("bs :: ~a~%" bs)
        ("gs :: ~a~%" gs)))
 

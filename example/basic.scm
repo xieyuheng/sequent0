@@ -96,11 +96,15 @@
 
 (run null zero cons)
 
+(run drop)
+
 (run null
      zero cons
      null
      zero cons
      append)
+
+(run drop)
 
 (run null
      zero cons
@@ -110,6 +114,8 @@
      zero cons
      append
      length)
+
+(run drop)
 
 (def map
   (lambda (-> [:t1 list (-> [:t1] [:t2])]

@@ -166,7 +166,7 @@
     [{'arrow ac sc}
      {'arrow (jojo->var-list (append ac sc))
              (jojo->fvar-list (append ac sc))
-             ac sc}]))
+             (map pass2-jo ac) (map pass2-jo sc)}]))
 
 (define (jojo->var-list l)
   (define (one vl n)
@@ -361,7 +361,8 @@
     k 0
     (match (vector-ref k 0)
       [{'todo al dl} {'todo al (bs/deep-list dl)}]
-      [{'done dl}    {'done (bs/deep-list dl)}])))
+      [{'done dl}    {'done (bs/deep-list dl)}]))
+  k)
 
 (define (uni-var/fresh? uv)
   (: uni-var -> bool)
@@ -464,16 +465,14 @@
   ;;   it needs to know the type to get input-number & output-number
   (match (compose/try-body b)
     [{sjj vrc}
-     (if3 [sjj]
-          [(push rs (% rsp-proto
-                       'ex   compose
-                       'end  rs/exit
-                       'vrc  vrc
-                       'jj   sjj))
-           (rs/next)]
-          [(push-list ds
-            (create-trunk-list t b
-             (pop-list ds (type/input-number t))))])]))
+     (push rs (% rsp-proto
+                 'ex   compose
+                 'end  rs/exit
+                 'vrc  vrc
+                 'jj   sjj))
+     (rs/next)]
+    [#f (let ([dl (pop-list ds (type/input-number t))])
+          (push-list ds (create-trunk-list t b dl)))]))
 
 (define (compose/try-body b)
   (: body -> (or #f {sjj vrc}))
@@ -509,10 +508,12 @@
                (compose/try-body r)])))]))
 
 (define (create-trunk-list t b dl)
-  (let ([k (vector {'todo b dl})])
-    (reverse
-     (map (lambda (i) {'trunk t k i})
-       (genlist (type/output-number pt))))))
+  (match #t
+    [#t
+     (let ([k (vector {'todo b dl})])
+       (reverse
+        (map (lambda (i) {'trunk t k i})
+          (genlist (type/output-number t)))))]))
 
 (define (type/input-number t)
   (match t
@@ -544,7 +545,7 @@
      {'uni-arrow nl fnl ajj sjj}]))
 
 (define (compose/arrow j)
-  (push ds (arrow->uni-arrow a)))
+  (push ds (arrow->uni-arrow j)))
 
 (define (compose/lambda j)
   (match j
@@ -660,7 +661,7 @@
   (let ([d (bs/walk (pop ds))])
     (match d
       [{'uni-arrow vnl fvnl ajj sjj}
-       (cut/type {'arrow vnl fvnl ajj sjj})]
+       (cut/type {'uni-arrow vnl fvnl ajj sjj})]
       [__
        (orz 'cut/apply
          ("cut/apply can not apply data~%")
@@ -703,6 +704,10 @@
             (gs/next)
             #f)])))
 
+;; - -(cover/data/data
+;;     (uni-var #((:m . 219) ()) 0)
+;;     (uni-var #((:m . 211) ()) 0))
+;; - -#<void>
 (define (cover/data/data d1 d2)
   (: data data -> bool)
   ;; var -walk-> fresh-var
@@ -713,14 +718,20 @@
       ;;   for it is used by top-level type-check
       [{{'uni-bind uv d} __} (cover/data/data d d2)]
       [{__ {'uni-bind uv d}} (cover/data/data d1 d)]
+
       ;; var is the hero
       ;; this should pass occur-check
       [{{'uni-var id1 level1} {'uni-var id2 level2}}
        (cond [(uni-var/eq? d1 d2) #t] ;; no self-cover
              [else (cover/uni-var/data d1 d2)])]
+
+      [{{'trunk t k i} {'uni-var id level}} (cover/trunk/uni-var d1 d2)]
+      [{{'uni-var id level} {'trunk t k i}} (cover/uni-var/trunk d1 d2)]
+
       [{{'uni-var id level} __} (cover/uni-var/data d1 d2)]
       [{__ {'uni-var id level}} #f]
-      ;; the only difference from unify/data/data
+      ;; different from unify/data/data
+
       ;; cons push gs
       [{{'cons n1 dl1} {'cons n2 dl2}}
        (cond [(eq? n1 n2)
@@ -731,11 +742,13 @@
                           'dl- dl2))
               (gs/next)]
              [else #f])]
+
       ;; trunk is the tricky part
       ;;   semantic equal is used
       [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}} (cover/trunk/trunk d1 d2)]
       [{{'trunk t k i} __} (cover/trunk/data d1 d2)]
       [{__ {'trunk t k i}} (cover/data/trunk d1 d2)]
+
       ;; others use syntax equal
       [{__ __} (equal? d1 d2)])))
 
@@ -748,12 +761,28 @@
 ;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
 
 (define (cover/uni-var/data uv d)
-  (: fresh-var data -> bool)
+  (: fresh-uni-var data -> bool)
   ;; no consistent-check
   ;;   because we do not have infer
-  (if (occur-check/data uv d)
-    (bs/extend uv d)
-    #f))
+  (if3 [(occur-check/data uv d)]
+       [(bs/extend uv d)
+        #t]
+       [#f]))
+
+;; different from unify/data/data
+(define (cover/trunk/uni-var t uv)
+  (: trunk fresh-uni-var -> bool)
+  (let ([result (try-trunk t)])
+    (if result
+      (cover/data/data result uv)
+      #f)))
+
+(define (cover/uni-var/trunk uv t)
+  (: fresh-uni-var trunk -> bool)
+  (let ([result (try-trunk t)])
+    (if result
+      (cover/data/data uv result)
+      (cover/uni-var/data uv t))))
 
 (define (cover/trunk/data t d)
   (let ([result (try-trunk t)])
@@ -815,13 +844,19 @@
       ;;   for it is used by top-level type-check
       [{{'uni-bind uv d} __} (unify/data/data d d2)]
       [{__ {'uni-bind uv d}} (unify/data/data d1 d)]
+
       ;; var is the hero
       ;; this should pass occur-check
       [{{'uni-var id1 level1} {'uni-var id2 level2}}
        (cond [(uni-var/eq? d1 d2) #t] ;; no self-unify
              [else (unify/uni-var/data d1 d2)])]
+
+      [{{'trunk t k i} {'uni-var id level}} (unify/trunk/uni-var d1 d2)]
+      [{{'uni-var id level} {'trunk t k i}} (unify/uni-var/trunk d1 d2)]
+
       [{{'uni-var id level} __} (unify/uni-var/data d1 d2)]
       [{__ {'uni-var id level}} (unify/uni-var/data d2 d1)]
+
       ;; cons push gs
       [{{'cons n1 dl1} {'cons n2 dl2}}
        (cond [(eq? n1 n2)
@@ -832,11 +867,13 @@
                           'dl- dl2))
               (gs/next)]
              [else #f])]
+
       ;; trunk is the tricky part
       ;;   semantic equal is used
       [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}} (unify/trunk/trunk d1 d2)]
       [{{'trunk t k i} __} (unify/trunk/data d1 d2)]
       [{__ {'trunk t k i}} (unify/data/trunk d1 d2)]
+
       ;; others use syntax equal
       [{__ __} (equal? d1 d2)])))
 
@@ -855,6 +892,21 @@
   (if (occur-check/data uv d)
     (bs/extend uv d)
     #f))
+
+;; different from unify/data/data
+(define (unify/trunk/uni-var t uv)
+  (: trunk fresh-uni-var -> bool)
+  (let ([result (try-trunk t)])
+    (if result
+      (unify/data/data result uv)
+      (unify/data/uni-var t uv))))
+
+(define (unify/uni-var/trunk uv t)
+  (: fresh-uni-var trunk -> bool)
+  (let ([result (try-trunk t)])
+    (if result
+      (unify/data/data uv result)
+      (unify/uni-var/data uv t))))
 
 (define (unify/trunk/data t d)
   (let ([result (try-trunk t)])
@@ -892,15 +944,16 @@
 (define (try-trunk t)
   (: trunk -> (or #f data))
   (match t
-    [{'trunk t k i}
+    [{'trunk a k i}
      (match (vector-ref k 0)
        [{'done dl} (list-ref dl i)]
        [{'todo b dl}
         (push-list ds dl)
-        (compose/body t b)
+        (compose/body a b)
         (let ([result (pop ds)])
-          (cond [(equal? result t) #f]
-                [else result]))])]))
+          (if (equal? result t)
+            #f
+            result))])]))
 
 (define (occur-check/data uv d)
   (: fresh-uni-var data -> bool)
@@ -925,8 +978,8 @@
   (match t
     [{'trunk t k i}
      (match (vector-ref k 0)
-       [{'todo b dl} (occur-check/data-list dl)]
-       [{'done dl}   (occur-check/data-list dl)])]))
+       [{'todo b dl} (occur-check/data-list uv dl)]
+       [{'done dl}   (occur-check/data-list uv dl)])]))
 
 (define print-define-flag #f)
 (define (print-define+) (set! print-define-flag #t))
@@ -1022,7 +1075,7 @@
   (match d
     [('uni-var . __)
      (cat ("~a " d))]
-    [('uni-bind)
+    [('uni-bind . __)
      (cat ("~a " d))]
     [{'cons n dl}
      (if3 [(null? dl)]
@@ -1049,9 +1102,9 @@
        ("gs :: ~a~%" gs)))
 
 (define (type-check ta al)
-  (: arrow {arrow ...} -> bool)
+  (: uni-arrow {uni-arrow ...} -> bool)
   (match ta
-    [('arrow . __)
+    [('uni-arrow . __)
      (for-each (lambda (a) (type-check/arrow ta a))
                al)]
     [__ (orz 'type-check
@@ -1061,8 +1114,8 @@
 (define (type-check/arrow ta a)
   (: type-arrow arrow -> bool)
   (match {ta a}
-    [{{'arrow tnl tfnl tajj tsjj}
-      {'arrow nl fnl ajj sjj}}
+    [{{'uni-arrow tnl rfrc tajj tsjj}
+      {'uni-arrow nl frc ajj sjj}}
      (let* ([tvrc (nl->vrc tnl)]
             [vrc (nl->vrc nl)]
             [dl-tajj (call-with-output-to-new-ds
@@ -1100,18 +1153,26 @@
           (push gs {bind-unify <gathered>}))
        (if3 [(push gs (% gsp-proto
                          'ex     unify
-                         'dl+    dl-tajj
-                         'dl-    dl-ajj))
+                         'dl+    dl-ajj
+                         'dl-    dl-tajj))
              (gs/next)]
             [(if3 [(push gs (% gsp-proto
                                'ex     cover
-                               'dl+    dl-tsjj
-                               'dl-    dl-sjj))
+                               'dl+    dl-sjj
+                               'dl-    dl-tsjj))
                    (gs/next)]
                   [(: ><><><
                       in lack of undo on success)
                    #t]
                   [(orz 'type-check/arrow
-                     ("cover fail~%"))])]
+                     ("cover fail~%")
+                     ("tsjj : ~a~%" tsjj)
+                     ("dl-tsjj : ~a~%" dl-tsjj)
+                     ("sjj : ~a~%" sjj)
+                     ("dl-sjj : ~a~%" dl-sjj))])]
             [(orz 'type-check/arrow
-               ("unify fail~%"))]))]))
+               ("unify fail~%")
+               ("tajj : ~a~%" tajj)
+               ("dl-tajj : ~a~%" dl-tajj)
+               ("ajj : ~a~%" ajj)
+               ("ajj : ~a~%" dl-ajj))]))]))

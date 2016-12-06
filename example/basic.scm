@@ -79,85 +79,85 @@
 (def type
   (type (-> [] [type])))
 
-(def list
-  (type (-> [type] [type])
-    null (-> [] [:t list])
-    cons (-> [:t list :t] [:t list])))
+;; (def list
+;;   (type (-> [type] [type])
+;;     null (-> [] [:t list])
+;;     cons (-> [:t list :t] [:t list])))
 
-(def append
-  (lambda (-> [:t list :t list] [:t list])
-    (-> [:l null] [:l])
-    (-> [:l :r :e cons] [:l :r append :e cons])))
+;; (def append
+;;   (lambda (-> [:t list :t list] [:t list])
+;;     (-> [:l null] [:l])
+;;     (-> [:l :r :e cons] [:l :r append :e cons])))
 
-(def length
-  (lambda (-> [:t list] [nat])
-    (-> [null] [zero])
-    (-> [:l :e cons] [:l length succ])))
+;; (def length
+;;   (lambda (-> [:t list] [nat])
+;;     (-> [null] [zero])
+;;     (-> [:l :e cons] [:l length succ])))
 
-(run null zero cons)
+;; (run null zero cons)
 
-(run drop)
+;; (run drop)
 
-(run null
-     zero cons
-     null
-     zero cons
-     append)
+;; (run null
+;;      zero cons
+;;      null
+;;      zero cons
+;;      append)
 
-(run drop)
+;; (run drop)
 
-(run null
-     zero cons
-     zero cons
-     null
-     zero cons
-     zero cons
-     append
-     length)
+;; (run null
+;;      zero cons
+;;      zero cons
+;;      null
+;;      zero cons
+;;      zero cons
+;;      append
+;;      length)
 
-(run drop)
+;; (run drop)
 
-(def map
-  (lambda (-> [:t1 list (-> [:t1] [:t2])]
-              [:t2 list])
-    (-> [null :f] [null])
-    (-> [:l :e cons :f] [:l :f map :e :f @ cons])))
+;; (def map
+;;   (lambda (-> [:t1 list (-> [:t1] [:t2])]
+;;               [:t2 list])
+;;     (-> [null :f] [null])
+;;     (-> [:l :e cons :f] [:l :f map :e :f @ cons])))
 
-(run null
-     zero cons
-     zero cons
-     (lambda (-> [nat] [nat])
-       (-> [zero] [zero succ]))
-     map)
+;; (run null
+;;      zero cons
+;;      zero cons
+;;      (lambda (-> [nat] [nat])
+;;        (-> [zero] [zero succ]))
+;;      map)
 
-(run drop)
+;; (run drop)
 
-(run null
-     zero cons
-     zero cons
-     zero cons
-     null
-     zero cons
-     zero cons
-     zero cons
-     append
-     (lambda (-> [nat] [nat])
-       (-> [zero] [zero succ]))
-     map)
+;; (run null
+;;      zero cons
+;;      zero cons
+;;      zero cons
+;;      null
+;;      zero cons
+;;      zero cons
+;;      zero cons
+;;      append
+;;      (lambda (-> [nat] [nat])
+;;        (-> [zero] [zero succ]))
+;;      map)
 
-(run drop)
+;; (run drop)
 
-(def has-length
-  (type (-> [:t list nat] [type])
-    null/has-length (-> [] [null zero has-length])
-    cons/has-length (-> [:l :n has-length]
-                        [:l :a cons :n succ has-length])))
+;; (def has-length
+;;   (type (-> [:t list nat] [type])
+;;     null/has-length (-> [] [null zero has-length])
+;;     cons/has-length (-> [:l :n has-length]
+;;                         [:l :a cons :n succ has-length])))
 
-(def map/has-length
-  (lambda (-> [:l :n has-length]
-              [:l :f map :n has-length])
-    (-> [null/has-length] [null/has-length])
-    (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
+;; (def map/has-length
+;;   (lambda (-> [:l :n has-length]
+;;               [:l :f map :n has-length])
+;;     (-> [null/has-length] [null/has-length])
+;;     (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
 
 (def vector
   (type (-> [nat type] [type])

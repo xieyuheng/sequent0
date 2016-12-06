@@ -9,6 +9,6 @@
 (include "sequent0.scm")
 (print-define+)
 
-;; (type-check+)
+(type-check+)
 ;; (cover-check+)
 ;; (recur-check+)

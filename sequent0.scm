@@ -1116,7 +1116,10 @@
   (match {ta a}
     [{{'uni-arrow tnl rfrc tajj tsjj}
       {'uni-arrow nl frc ajj sjj}}
-     (let* ([tvrc (nl->vrc tnl)]
+     (let* ([ds0 ds]
+            [bs0 bs]
+            [gs0 gs]
+            [tvrc (nl->vrc tnl)]
             [vrc (nl->vrc nl)]
             [dl-tajj (call-with-output-to-new-ds
                       (lambda ()
@@ -1161,8 +1164,9 @@
                                'dl+    dl-sjj
                                'dl-    dl-tsjj))
                    (gs/next)]
-                  [(: ><><><
-                      in lack of undo on success)
+                  [(set! ds ds0)
+                   (set! bs bs0)
+                   (set! gs gs0)
                    #t]
                   [(orz 'type-check/arrow
                      ("cover fail~%")

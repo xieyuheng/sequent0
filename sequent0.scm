@@ -33,6 +33,16 @@
    todo               {uni-arrow ...} {data ...}
    done               {data ...})
 
+(define-syntax debug0
+  (syntax-rules ()
+    [(debug0 who c ...)
+     (let ()
+       (print-ds)
+       (print-rs)
+       (print-gs)
+       (print-bs)
+       (error who (cating ("~%") c ...)))]))
+
 (define-macro (push s v) `(set! ,s (cons ,v ,s)))
 
 (define-macro (push-list s l)
@@ -40,14 +50,14 @@
 
 (define-macro (tos s)
   `(if (null? ,s)
-     (orz 'tos
+     (debug0 'tos
        ("stack is empty : ~a~%" (quote ,s)))
      (car ,s)))
 
 (define-macro (pop s)
   (let ([v (gensym "pop/v")])
     `(if (null? ,s)
-       (orz 'pop
+       (debug0 'pop
          ("stack is empty : ~a~%" (quote ,s)))
        (let ([,v (car ,s)])
          (set! ,s (cdr ,s))
@@ -56,13 +66,81 @@
 (define-macro (pop-list s n)
   (let ([v (gensym "fetch/v")])
     `(if (< (length ,s) ,n)
-       (orz 'pop-list
+       (debug0 'pop-list
          ("stack is not long enough : ~a~%" (quote ,s))
          ("stack length : ~a~%" (length ,s))
          ("need length : ~a~%" ,n))
        (let ([,v (take ,s ,n)])
          (set! ,s (drop ,s ,n))
          ,v))))
+
+(: ns {(name . meaning) ...})
+(: ds {data ...})
+(: bs {(id . ls) ...})
+(: rs {rsp ...})
+(: gs {gsp ...})
+
+(define (print-jo j)
+  ;; (match j
+  ;;   []
+  ;;   [])
+  (display j)
+  (display "\n"))
+
+(define (print-data d)
+  (match d
+    [('uni-var . __)
+     (cat ("~a " d))]
+    [('uni-bind . __)
+     (cat ("~a " d))]
+    [{'cons n dl}
+     (if3 [(null? dl)]
+          [(cat ("~a " n))]
+          [(cat ("[ ~a " n))
+           (map print-data dl)
+           (cat ("] "))])]
+    [('uni-arrow . __)
+     (cat ("~a " d))]
+    [('uni-lambda . __)
+     (cat ("~a " d))]
+    [('trunk . __)
+     (cat ("~a " d))]))
+
+(define (print-bsp bsp)
+  (display bsp)
+  (display "\n"))
+
+(define (print-nsp nsp)
+  (display nsp)
+  (display "\n"))
+
+(define (print-ds) (map print-data ds) (display "\n"))
+(define (print-bs) (map print-bsp  bs) (display "\n"))
+(define (print-ns) (map print-nsp  ns) (display "\n"))
+
+(define (print-rs)
+  (cat ("~%")
+       ("<rs>~%"))
+  (map (lambda (o)
+         (@ o 'print))
+    rs)
+  (cat ("</rs>~%")
+       ("~%")))
+
+(define (print-gs)
+  (cat ("~%")
+       ("<gs>~%"))
+  (map (lambda (o)
+         (@ o 'print))
+    gs)
+  (cat ("</gs>~%")
+       ("~%")))
+
+(define (print-env)
+  (print-ds)
+  (print-rs)
+  (print-gs)
+  (print-bs))
 
 ;; name-stack
 (define ns '())
@@ -93,7 +171,7 @@
          [found (assq n (^ rsp 'vrc))])
     (if found
       (cdr found)
-      (orz 'name->uni-var
+      (debug0 'name->uni-var
         ("can not find name : ~a~%" n)
         ("rsp var record : ~a~%" (^ rsp 'vrc))))))
 
@@ -105,7 +183,7 @@
     [{'arrow nl fnl ajj sjj}
      (if (null? fnl)
        {'uni-arrow nl '() ajj sjj}
-       (orz 'compile-uni-arrow
+       (debug0 'compile-uni-arrow
          ("the free-var-name-list of arrow is not empty~%")
          ("free-var-name-list : ~a~%" fnl)
          ("arrow : ~a~%" a)))]))
@@ -384,13 +462,23 @@
   ((^ (tos rs) 'ex)))
 
 (define rsp-proto
-  (new-struct
+  (new-object
    (pair-list
     'c      0
     'ex     '(explainer)
     'end    rs/exit
     'vrc    '(var record)
-    'jj     '(jojo))))
+    'jj     '(jojo))
+   (pair-list
+    'print
+    (lambda (o)
+      (cat ("<rsp>~%")
+           ("  counter : ~a~%"       (^ o 'c))
+           ("  explainer : ~a~%"     (^ o 'ex))
+           ("  ender : ~a~%"         (^ o 'end))
+           ("  var-record :~%~a~%"   (^ o 'vrc))
+           ("  jojo :~%~a~%"         (^ o 'jj))
+           ("</rsp>~%"))))))
 
 (define (compose)
   (let* ([rsp (pop rs)]
@@ -437,7 +525,7 @@
     [{'call n}
      (let ([found (assq n ns)])
        (if (not found)
-         (orz 'compose/call ("unknow name : ~a~%" n))
+         (debug0 'compose/call ("unknow name : ~a~%" n))
          (match (cdr found)
            [{'meaning-type a n nl}
             (let ([len (type/input-number a)])
@@ -561,7 +649,7 @@
       [{'uni-lambda t b}
        (compose/body t b)]
       [__
-       (orz 'compose/apply
+       (debug0 'compose/apply
          ("compose/apply can not apply data~%")
          ("data : ~a~%" d)
          ("jo : ~a~%" j))])))
@@ -604,7 +692,7 @@
            (push ds {'uni-var id (+ 1 level)})])))))
 
 (define (cut/bind j)
-  (orz 'cut/bind
+  (debug0 'cut/bind
     ("bind can not occur in type-arrow~%")
     ("bind : ~a~%" j)))
 
@@ -613,7 +701,7 @@
     [{'call n}
      (let ([found (assq n ns)])
        (if (not found)
-         (orz 'cut/call
+         (debug0 'cut/call
            ("unknow name : ~a~%" n))
          (match (cdr found)
            [{'meaning-type a n nl} (cut/type a)]
@@ -646,11 +734,11 @@
                          'vrc  vrc
                          'jj  sjj))
              (rs/next)]
-            [(orz 'cut/type
+            [(debug0 'cut/type
                ("fail on unify~%"))]))]))
 
 (define (cut/arrow j)
-  (orz 'cut/arrow
+  (debug0 'cut/arrow
     ("arrow can not occur in type-arrow~%")
     ("arrow : ~a~%" j)))
 
@@ -665,7 +753,7 @@
       [{'uni-arrow vnl fvnl ajj sjj}
        (cut/type {'uni-arrow vnl fvnl ajj sjj})]
       [__
-       (orz 'cut/apply
+       (debug0 'cut/apply
          ("cut/apply can not apply data~%")
          ("data : ~a~%" d)
          ("jo : ~a~%" j))])))
@@ -681,13 +769,23 @@
   ((^ (tos gs) 'ex)))
 
 (define gsp-proto
-  (new-struct
+  (new-object
    (pair-list
     'c      0
     'ex     '(explainer)
     'end    gs/exit
     'dl+    '(data-list)
-    'dl-    '(data-list))))
+    'dl-    '(data-list))
+   (pair-list
+    'print
+    (lambda (o)
+      (cat ("<gsp>~%")
+           ("  counter : ~a~%"        (^ o 'c))
+           ("  explainer : ~a~%"      (^ o 'ex))
+           ("  ender : ~a~%"          (^ o 'end))
+           ("  data-list + :~%~a~%"   (^ o 'dl+))
+           ("  data-list - :~%~a~%"   (^ o 'dl-))
+           ("</gsp>~%"))))))
 
 (define (cover)
   (: -> bool)
@@ -1015,7 +1113,7 @@
   (let ([found (assq key key-record)])
     (if found
       (cdr found)
-      (orz 'find-key
+      (debug0 'find-key
         ("can not find key : ~a~%" key)))))
 
 (define (def-lambda n body)
@@ -1079,43 +1177,13 @@
   (for-each compose/jo (map compile-jo s))
   (print-ds))
 
-(define (print-data d)
-  (match d
-    [('uni-var . __)
-     (cat ("~a " d))]
-    [('uni-bind . __)
-     (cat ("~a " d))]
-    [{'cons n dl}
-     (if3 [(null? dl)]
-          [(cat ("~a " n))]
-          [(cat ("[ ~a " n))
-           (map print-data dl)
-           (cat ("] "))])]
-    [('uni-arrow . __)
-     (cat ("~a " d))]
-    [('uni-lambda . __)
-     (cat ("~a " d))]
-    [('trunk . __)
-     (cat ("~a " d))]))
-
-(define (print-ds)
-  (map print-data ds)
-  (display "\n")
-  (void))
-
-(define (print-env)
-  (cat ("ds :: ")) (print-ds) (cat ("~%"))
-  (cat ("rs :: ~a~%" rs)
-       ("bs :: ~a~%" bs)
-       ("gs :: ~a~%" gs)))
-
 (define (type-check ta al)
   (: uni-arrow {uni-arrow ...} -> bool)
   (match ta
     [('uni-arrow . __)
      (for-each (lambda (a) (type-check/arrow ta a))
                al)]
-    [__ (orz 'type-check
+    [__ (debug0 'type-check
           ("type of function must be arrow~%")
           ("type : ~a~%" ta))]))
 
@@ -1176,13 +1244,13 @@
                    (set! bs bs0)
                    (set! gs gs0)
                    #t]
-                  [(orz 'type-check/arrow
+                  [(debug0 'type-check/arrow
                      ("cover fail~%")
                      ("tsjj : ~a~%" tsjj)
                      ("dl-tsjj : ~a~%" dl-tsjj)
                      ("sjj : ~a~%" sjj)
                      ("dl-sjj : ~a~%" dl-sjj))])]
-            [(orz 'type-check/arrow
+            [(debug0 'type-check/arrow
                ("unify fail~%")
                ("tajj : ~a~%" tajj)
                ("dl-tajj : ~a~%" dl-tajj)

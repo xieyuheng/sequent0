@@ -18,7 +18,6 @@
     (-> [zero] [zero succ])
     (-> [:n succ] [:n factorial :n succ mul])))
 
-
 (def drop
   (lambda (-> [:t] [])
     (-> [:d]

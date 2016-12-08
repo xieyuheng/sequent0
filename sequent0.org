@@ -7,16 +7,7 @@
     with indentation
 
   - add bind-unify
-
-  - when return arrow & lambda
-    arrow->uni-arrow generate new frc
-    the following functions call arrow->uni-arrow
-    compose/arrow & compose/lambda
-    cut/lambda
-
-  - when generate vrc by (nl->vrc nl)
-    only nl is used
-    fnl is not used
+    more doc about the logic of type-check & compose & cut
 
   - need much more tests to show that type-check is 'safe'
     program that should not be checked
@@ -35,6 +26,17 @@
     - lambda & arrow found from top-level name
       are uni-lambda & uni-arrow indeed
       they just have empty frc [free-var-record]
+
+*** note about frc
+
+    - when return arrow & lambda
+      arrow->uni-arrow generate new frc
+      the following functions call arrow->uni-arrow
+      compose/arrow & compose/lambda
+      cut/lambda
+
+    - when generate vrc by (nl->vrc nl)
+      also use fnl
 
 *** terminology
 
@@ -266,42 +268,6 @@
        meaning-type       uni-arrow name {name ...}
        meaning-data       uni-arrow name name
        meaning-lambda     uni-arrow {uni-arrow ...})
-    #+end_src
-
-*** id/new
-
-    #+begin_src scheme
-    (define id/counter 0)
-
-    ;; (define (id/new n ls)
-    ;;   (set! id/counter (+ 1 id/counter))
-    ;;   (vector (cons n id/counter) ls))
-
-    (define (id/new n)
-      (set! id/counter (+ 1 id/counter))
-      (vector (cons n id/counter) '()))
-    #+end_src
-
-*** nl->vrc
-
-    #+begin_src scheme
-    (define (nl->vrc nl)
-      (map (lambda (n)
-             (cons n (list 'uni-var (id/new n) 0)))
-        nl))
-    #+end_src
-
-*** name->uni-var
-
-    #+begin_src scheme
-    (define (name->uni-var n)
-      (let* ([rsp (tos rs)]
-             [found (assq n (^ rsp 'vrc))])
-        (if found
-          (cdr found)
-          (debug0 'name->uni-var
-            ("can not find name : ~a~%" n)
-            ("rsp var record : ~a~%" (^ rsp 'vrc))))))
     #+end_src
 
 *** compile
@@ -695,12 +661,68 @@
         'print
         (lambda (o)
           (cat ("<rsp>~%")
-               ("  counter : ~a~%"       (^ o 'c))
-               ("  explainer : ~a~%"     (^ o 'ex))
-               ("  ender : ~a~%"         (^ o 'end))
-               ("  var-record :~%~a~%"   (^ o 'vrc))
-               ("  jojo :~%~a~%"         (^ o 'jj))
+               ("  :counter: ~a~%"       (^ o 'c))
+               ("  :explainer: ~a~%"     (^ o 'ex))
+               ("  :ender: ~a~%"         (^ o 'end))
+               ("  :var-record:~%~a~%"   (^ o 'vrc))
+               ("  :jojo:~%~a~%"         (^ o 'jj))
                ("</rsp>~%"))))))
+    #+end_src
+
+*** id/new
+
+    #+begin_src scheme
+    (define id/counter 0)
+
+    ;; (define (id/new n ls)
+    ;;   (set! id/counter (+ 1 id/counter))
+    ;;   (vector (cons n id/counter) ls))
+
+    (define (id/new n)
+      (set! id/counter (+ 1 id/counter))
+      (vector (cons n id/counter) '()))
+    #+end_src
+
+*** nl->vrc
+
+    #+begin_src scheme
+    (define (nl->vrc nl)
+      (map (lambda (n)
+             (cons n (list 'uni-var (id/new n) 0)))
+        nl))
+    #+end_src
+
+*** name->uni-var
+
+    #+begin_src scheme
+    (define (name->uni-var n)
+      (let* ([rsp (tos rs)]
+             [found (assq n (^ rsp 'vrc))])
+        (if found
+          (cdr found)
+          (debug0 'name->uni-var
+            ("can not find name : ~a~%" n)
+            ("rsp var record : ~a~%" (^ rsp 'vrc))))))
+    #+end_src
+
+*** name->fvar-record
+
+    #+begin_src scheme
+    (define (name->fvar-record n)
+      (let* ([rsp (tos rs)]
+             [found (assq n (^ rsp 'vrc))])
+        (if found
+          (cons n (cdr found))
+          (debug0 'name->fvar-record
+            ("can not find name : ~a~%" n)
+            ("rsp var record : ~a~%" (^ rsp 'vrc))))))
+    #+end_src
+
+*** fnl->frc
+
+    #+begin_src scheme
+    (define (fnl->frc fnl)
+      (map name->fvar-record fnl))
     #+end_src
 
 *** compose
@@ -824,8 +846,8 @@
           ;; return sjj on success with commit
           (match b
             [{} #f]
-            [({'uni-arrow nl fnl ajj sjj} . r)
-             (let* ([vrc (nl->vrc nl)]
+            [({'uni-arrow nl frc ajj sjj} . r)
+             (let* ([vrc (append frc (nl->vrc nl))]
                     [ds0 ds]
                     [bs0 bs]
                     [gs0 gs])
@@ -869,38 +891,36 @@
         #+begin_src scheme
         (define (type/input-number t)
           (match t
-            [{'uni-arrow nl fnl ajj sjj}
+            [{'uni-arrow nl frc ajj sjj}
              (length (call-with-output-to-new-ds
                       (lambda ()
                         (push rs (% rsp-proto
                                     'ex   compose
                                     'end  rs/exit
-                                    'vrc  (nl->vrc nl)
+                                    'vrc  (append frc (nl->vrc nl))
                                     'jj  ajj))
                         (rs/next))))]))
 
         (define (type/output-number t)
           (match t
-            [{'uni-arrow nl fnl ajj sjj}
+            [{'uni-arrow nl frc ajj sjj}
              (length (call-with-output-to-new-ds
                       (lambda ()
                         (push rs (% rsp-proto
                                     'ex   compose
                                     'end  rs/exit
-                                    'vrc  (nl->vrc nl)
+                                    'vrc  (append frc (nl->vrc nl))
                                     'jj  sjj))
                         (rs/next))))]))
         #+end_src
 
-***** ><>< arrow->uni-arrow
-
-      - ><><>< 先不處理 fvar
+***** arrow->uni-arrow
 
       #+begin_src scheme
       (define (arrow->uni-arrow a)
         (match a
           [{'arrow nl fnl ajj sjj}
-           {'uni-arrow nl fnl ajj sjj}]))
+           {'uni-arrow nl (fnl->frc fnl) ajj sjj}]))
       #+end_src
 
 ***** compose/arrow
@@ -1016,8 +1036,8 @@
       #+begin_src scheme
       (define (cut/type a)
         (match a
-          [{'uni-arrow nl fnl ajj sjj}
-           (let* ([vrc (nl->vrc nl)]
+          [{'uni-arrow nl frc ajj sjj}
+           (let* ([vrc (append frc (nl->vrc nl))]
                   [dl1 (call-with-output-to-new-ds
                         (lambda ()
                           (push rs (% rsp-proto
@@ -1106,11 +1126,11 @@
         'print
         (lambda (o)
           (cat ("<gsp>~%")
-               ("  counter : ~a~%"        (^ o 'c))
-               ("  explainer : ~a~%"      (^ o 'ex))
-               ("  ender : ~a~%"          (^ o 'end))
-               ("  data-list + :~%~a~%"   (^ o 'dl+))
-               ("  data-list - :~%~a~%"   (^ o 'dl-))
+               ("  :counter: ~a~%"        (^ o 'c))
+               ("  :explainer: ~a~%"      (^ o 'ex))
+               ("  :ender: ~a~%"          (^ o 'end))
+               ("  :data-list+: ~%~a~%"   (^ o 'dl+))
+               ("  :data-list-: ~%~a~%"   (^ o 'dl-))
                ("</gsp>~%"))))))
     #+end_src
 
@@ -1667,13 +1687,13 @@
     (define (type-check/arrow ta a)
       (: type-arrow arrow -> bool)
       (match {ta a}
-        [{{'uni-arrow tnl rfrc tajj tsjj}
+        [{{'uni-arrow tnl tfrc tajj tsjj}
           {'uni-arrow nl frc ajj sjj}}
          (let* ([ds0 ds]
                 [bs0 bs]
                 [gs0 gs]
-                [tvrc (nl->vrc tnl)]
-                [vrc (nl->vrc nl)]
+                [tvrc (append tfrc (nl->vrc tnl))]
+                [vrc (append frc (nl->vrc nl))]
                 [dl-tajj (call-with-output-to-new-ds
                           (lambda ()
                             (push rs (% rsp-proto

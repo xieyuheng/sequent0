@@ -151,30 +151,6 @@
    meaning-data       uni-arrow name name
    meaning-lambda     uni-arrow {uni-arrow ...})
 
-(define id/counter 0)
-
-;; (define (id/new n ls)
-;;   (set! id/counter (+ 1 id/counter))
-;;   (vector (cons n id/counter) ls))
-
-(define (id/new n)
-  (set! id/counter (+ 1 id/counter))
-  (vector (cons n id/counter) '()))
-
-(define (nl->vrc nl)
-  (map (lambda (n)
-         (cons n (list 'uni-var (id/new n) 0)))
-    nl))
-
-(define (name->uni-var n)
-  (let* ([rsp (tos rs)]
-         [found (assq n (^ rsp 'vrc))])
-    (if found
-      (cdr found)
-      (debug0 'name->uni-var
-        ("can not find name : ~a~%" n)
-        ("rsp var record : ~a~%" (^ rsp 'vrc))))))
-
 (define (compile-arrow a)
   (pass2-arrow (pass1-arrow a)))
 
@@ -473,12 +449,48 @@
     'print
     (lambda (o)
       (cat ("<rsp>~%")
-           ("  counter : ~a~%"       (^ o 'c))
-           ("  explainer : ~a~%"     (^ o 'ex))
-           ("  ender : ~a~%"         (^ o 'end))
-           ("  var-record :~%~a~%"   (^ o 'vrc))
-           ("  jojo :~%~a~%"         (^ o 'jj))
+           ("  :counter: ~a~%"       (^ o 'c))
+           ("  :explainer: ~a~%"     (^ o 'ex))
+           ("  :ender: ~a~%"         (^ o 'end))
+           ("  :var-record:~%~a~%"   (^ o 'vrc))
+           ("  :jojo:~%~a~%"         (^ o 'jj))
            ("</rsp>~%"))))))
+
+(define id/counter 0)
+
+;; (define (id/new n ls)
+;;   (set! id/counter (+ 1 id/counter))
+;;   (vector (cons n id/counter) ls))
+
+(define (id/new n)
+  (set! id/counter (+ 1 id/counter))
+  (vector (cons n id/counter) '()))
+
+(define (nl->vrc nl)
+  (map (lambda (n)
+         (cons n (list 'uni-var (id/new n) 0)))
+    nl))
+
+(define (name->uni-var n)
+  (let* ([rsp (tos rs)]
+         [found (assq n (^ rsp 'vrc))])
+    (if found
+      (cdr found)
+      (debug0 'name->uni-var
+        ("can not find name : ~a~%" n)
+        ("rsp var record : ~a~%" (^ rsp 'vrc))))))
+
+(define (name->fvar-record n)
+  (let* ([rsp (tos rs)]
+         [found (assq n (^ rsp 'vrc))])
+    (if found
+      (cons n (cdr found))
+      (debug0 'name->fvar-record
+        ("can not find name : ~a~%" n)
+        ("rsp var record : ~a~%" (^ rsp 'vrc))))))
+
+(define (fnl->frc fnl)
+  (map name->fvar-record fnl))
 
 (define (compose)
   (let* ([rsp (pop rs)]
@@ -570,8 +582,8 @@
   ;; return sjj on success with commit
   (match b
     [{} #f]
-    [({'uni-arrow nl fnl ajj sjj} . r)
-     (let* ([vrc (nl->vrc nl)]
+    [({'uni-arrow nl frc ajj sjj} . r)
+     (let* ([vrc (append frc (nl->vrc nl))]
             [ds0 ds]
             [bs0 bs]
             [gs0 gs])
@@ -607,32 +619,32 @@
 
 (define (type/input-number t)
   (match t
-    [{'uni-arrow nl fnl ajj sjj}
+    [{'uni-arrow nl frc ajj sjj}
      (length (call-with-output-to-new-ds
               (lambda ()
                 (push rs (% rsp-proto
                             'ex   compose
                             'end  rs/exit
-                            'vrc  (nl->vrc nl)
+                            'vrc  (append frc (nl->vrc nl))
                             'jj  ajj))
                 (rs/next))))]))
 
 (define (type/output-number t)
   (match t
-    [{'uni-arrow nl fnl ajj sjj}
+    [{'uni-arrow nl frc ajj sjj}
      (length (call-with-output-to-new-ds
               (lambda ()
                 (push rs (% rsp-proto
                             'ex   compose
                             'end  rs/exit
-                            'vrc  (nl->vrc nl)
+                            'vrc  (append frc (nl->vrc nl))
                             'jj  sjj))
                 (rs/next))))]))
 
 (define (arrow->uni-arrow a)
   (match a
     [{'arrow nl fnl ajj sjj}
-     {'uni-arrow nl fnl ajj sjj}]))
+     {'uni-arrow nl (fnl->frc fnl) ajj sjj}]))
 
 (define (compose/arrow j)
   (push ds (arrow->uni-arrow j)))
@@ -710,8 +722,8 @@
 
 (define (cut/type a)
   (match a
-    [{'uni-arrow nl fnl ajj sjj}
-     (let* ([vrc (nl->vrc nl)]
+    [{'uni-arrow nl frc ajj sjj}
+     (let* ([vrc (append frc (nl->vrc nl))]
             [dl1 (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
@@ -780,11 +792,11 @@
     'print
     (lambda (o)
       (cat ("<gsp>~%")
-           ("  counter : ~a~%"        (^ o 'c))
-           ("  explainer : ~a~%"      (^ o 'ex))
-           ("  ender : ~a~%"          (^ o 'end))
-           ("  data-list + :~%~a~%"   (^ o 'dl+))
-           ("  data-list - :~%~a~%"   (^ o 'dl-))
+           ("  :counter: ~a~%"        (^ o 'c))
+           ("  :explainer: ~a~%"      (^ o 'ex))
+           ("  :ender: ~a~%"          (^ o 'end))
+           ("  :data-list+: ~%~a~%"   (^ o 'dl+))
+           ("  :data-list-: ~%~a~%"   (^ o 'dl-))
            ("</gsp>~%"))))))
 
 (define (cover)
@@ -1190,13 +1202,13 @@
 (define (type-check/arrow ta a)
   (: type-arrow arrow -> bool)
   (match {ta a}
-    [{{'uni-arrow tnl rfrc tajj tsjj}
+    [{{'uni-arrow tnl tfrc tajj tsjj}
       {'uni-arrow nl frc ajj sjj}}
      (let* ([ds0 ds]
             [bs0 bs]
             [gs0 gs]
-            [tvrc (nl->vrc tnl)]
-            [vrc (nl->vrc nl)]
+            [tvrc (append tfrc (nl->vrc tnl))]
+            [vrc (append frc (nl->vrc nl))]
             [dl-tajj (call-with-output-to-new-ds
                       (lambda ()
                         (push rs (% rsp-proto

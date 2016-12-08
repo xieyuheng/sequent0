@@ -1,12 +1,10 @@
 #+PROPERTY: tangle sequent0.scm
 #+title: sequent0
-
+- debug0
+  with better printer
 * todo
 
   - add bind-unify
-
-  - error report of cover & unify
-    which make use of the gs
 
   - when return arrow & lambda
     arrow->uni-arrow generate new frc
@@ -564,7 +562,11 @@
       ((^ (tos rs) 'ex)))
 
     (define rsp-proto
-      (new-struct
+      (new-object
+       (pair-list
+        'print
+        (lambda (o)
+          ))
        (pair-list
         'c      0
         'ex     '(explainer)
@@ -1500,20 +1502,9 @@
               (display "\n")))))
       #+end_src
 
-*** run
+*** printer
 
-***** run
-
-      #+begin_src scheme
-      (define-macro (run . s)
-        `($run (quote ,s)))
-
-      (define ($run s)
-        (for-each compose/jo (map compile-jo s))
-        (print-ds))
-      #+end_src
-
-***** print-data
+***** >< print-data
 
       #+begin_src scheme
       (define (print-data d)
@@ -1545,15 +1536,77 @@
         (void))
       #+end_src
 
-***** print-env
+***** print-rsp
 
       #+begin_src scheme
-      (define (print-env)
-        (cat ("ds :: ")) (print-ds) (cat ("~%"))
-        (cat ("rs :: ~a~%" rs)
-             ("bs :: ~a~%" bs)
-             ("gs :: ~a~%" gs)))
+      (define (print-rsp d)
+        (match d
+          [('uni-var . __)
+           (cat ("~a " d))]
+          [('uni-bind . __)
+           (cat ("~a " d))]
+          [{'cons n dl}
+           (if3 [(null? dl)]
+                [(cat ("~a " n))]
+                [(cat ("[ ~a " n))
+                 (map print-data dl)
+                 (cat ("] "))])]
+          [('uni-arrow . __)
+           (cat ("~a " d))]
+          [('uni-lambda . __)
+           (cat ("~a " d))]
+          [('trunk . __)
+           (cat ("~a " d))]))
       #+end_src
+
+***** print-rs
+
+      #+begin_src scheme
+      (define (print-rs)
+        )
+      #+end_src
+
+***** print-gs
+
+      #+begin_src scheme
+
+      #+end_src
+
+***** print-bs
+
+      #+begin_src scheme
+
+      #+end_src
+
+***** print-ns
+
+      #+begin_src scheme
+
+      #+end_src
+
+*** run
+
+    #+begin_src scheme
+    (define-macro (run . s)
+      `($run (quote ,s)))
+
+    (define ($run s)
+      (for-each compose/jo (map compile-jo s))
+      (print-ds))
+    #+end_src
+
+*** debug0
+
+    #+begin_src scheme
+    (define-syntax debug0
+      (syntax-rules ()
+        [(debug0 who c ...)
+         (error who (cating ("~%") c ...))
+         (print-ds)
+         (print-rs)
+         (print-gs)
+         (print-bs)]))
+    #+end_src
 
 *** ><><>< type-check
 

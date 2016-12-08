@@ -33,12 +33,23 @@
 
 ;; apply-method
 ;;   object may has a field called method-record
-;;   I do not need this for now
-;; (define (@ object message . rest)
-;;   (let ([])
-;;     ))
+;;   methods in it are called by (apply methods object rest)
+(define (@ object message . rest)
+  (let ([mrc (assq 'method-record object)])
+    (if mrc
+      (let ([p (assq message (cdr mrc))])
+        (if p
+          (apply (cdr p) object rest)
+          (orz '@
+            ("- method-record of object does not have method for message~%")
+            ("  object : ~a~%" object)
+            ("  method-record : ~a~%" mrc)
+            ("  message : ~a~%" message))))
+      (orz '@
+        ("- object does not have 'method-record field~%")
+        ("  object : ~a~%" object)))))
 
-(define (new-object mpl vpl)
+(define (new-object vpl mpl)
   (cons (cons 'method-record mpl)
         vpl))
 
@@ -50,11 +61,11 @@
 
 ;; (define o1
 ;;   (new-object
-;;    (pair-list)
 ;;    (pair-list
 ;;     'a 1
 ;;     'b 2
-;;     'c 3)))
+;;     'c 3)
+;;    (pair-list)))
 
 ;; (% o1 'a 4)
 ;; (^ (% o1 'a 4) 'a)

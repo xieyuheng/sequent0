@@ -204,3 +204,7 @@
      map)
 
 (run drop)
+
+(def fraction
+  (type (-> [type %:t] [type])
+    fline (-> [:t dup] [:t fraction])))

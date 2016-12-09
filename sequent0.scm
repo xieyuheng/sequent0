@@ -22,7 +22,7 @@
    cons               name {data ...}
    uni-arrow          {var-name ...} {(fvar-name . uni-var) ...} {jo ...} {jo ...}
    uni-lambda         uni-arrow {uni-arrow ...}
-   trunk              uni-arrow (vector trunky) index)
+   trunk              adl sdl (vector trunky) index)
 
 (: id                 (vector (name . counter) ls))
 (: ls                 {(level . data) ...})
@@ -141,6 +141,16 @@
   (print-rs)
   (print-gs)
   (print-bs))
+
+(define (clear-env)
+  (set! ds '())
+  (set! rs '())
+  (set! gs '())
+  (set! bs '()))
+
+(define (clear-world)
+  (clear-env)
+  (set! ns '()))
 
 ;; name-stack
 (define ns '())
@@ -404,7 +414,9 @@
       ;; a uni-var is fresh after bs/walk
       [{'cons n dl}          {'cons n (bs/deep-list dl)}]
       [{'uni-bind uv d}      {'bind (bs/deep uv) (bs/deep d)}]
-      [{'trunk t k i}        {'trunk t (bs/deep-trunky k) i}]
+      [{'trunk adl sdl k i}  {'trunk (bs/deep-list adl)
+                                     (bs/deep-list sdl)
+                                     (bs/deep-trunky k) i}]
       [__                    d])))
 
 (define (bs/deep-list dl)
@@ -588,36 +600,63 @@
      (let* ([vrc (append frc (nl->vrc nl))]
             [ds0 ds]
             [bs0 bs]
-            [gs0 gs])
-       (let* ([dl1 (call-with-output-to-new-ds
-                    (lambda ()
-                      (push rs (% rsp-proto
-                                  'ex   compose
-                                  'end  rs/exit
-                                  'vrc  vrc
-                                  'jj   ajj))
-                      (rs/next)))]
-              [dl2 (pop-list ds (length dl1))])
-         (if3 [(push bs '(commit-point))
-               (push gs (% gsp-proto
-                           'ex   cover
-                           'end  bs/commit
-                           'dl+  dl1
-                           'dl-  dl2))
-               (gs/next)]
-              [{sjj vrc}]
-              [(set! ds ds0)
-               (set! bs bs0)
-               (set! gs gs0)
-               (compose/try-body r)])))]))
+            [gs0 gs]
+            [dl1 (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs (% rsp-proto
+                                'ex   compose
+                                'end  rs/exit
+                                'vrc  vrc
+                                'jj   ajj))
+                    (rs/next)))]
+            [dl2 (pop-list ds (length dl1))])
+       (if3 [(push bs '(commit-point))
+             (push gs (% gsp-proto
+                         'ex   cover
+                         'end  bs/commit
+                         'dl+  dl1
+                         'dl-  dl2))
+             (gs/next)]
+            [{sjj vrc}]
+            [(set! ds ds0)
+             (set! bs bs0)
+             (set! gs gs0)
+             (compose/try-body r)]))]))
 
+;; ><><><
+;; need bind-unify for adl and dl
 (define (create-trunk-list t b dl)
-  (match #t
-    [#t
-     (let ([k (vector {'todo b dl})])
+  (match t
+    [{'uni-arrow nl frc ajj sjj}
+     (let* ([vrc (append frc (nl->vrc nl))]
+            [adl (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs (% rsp-proto
+                                'ex   compose
+                                'end  rs/exit
+                                'vrc  vrc
+                                'jj   sjj))
+                    (rs/next)))]
+            [sdl (call-with-output-to-new-ds
+                  (lambda ()
+                    (push rs (% rsp-proto
+                                'ex   compose
+                                'end  rs/exit
+                                'vrc  vrc
+                                'jj   sjj))
+                    (rs/next)))]
+            [k (vector {'todo b dl})])
        (reverse
-        (map (lambda (i) {'trunk t k i})
-          (genlist (type/output-number t)))))]))
+        (map (lambda (i) {'trunk adl sdl k i})
+          (genlist (length sdl)))))]))
+
+;; (define (create-trunk-list t b dl)
+;;   (match t
+;;     [{'uni-arrow nl frc ajj sjj}
+;;      (let* ([k (vector {'todo b dl})])
+;;        (reverse
+;;         (map (lambda (i) {'trunk t k i})
+;;           (genlist (type/output-number t)))))]))
 
 (define (type/input-number t)
   (match t
@@ -665,8 +704,7 @@
       [__
        (debug0 'compose/apply
          ("compose/apply can not apply data~%")
-         ("data : ~a~%" d)
-         ("jo : ~a~%" j))])))
+         ("data : ~a~%" d))])))
 
 (define (cut)
   (let* ([rsp (pop rs)]
@@ -707,7 +745,7 @@
 
 (define (cut/bind j)
   (debug0 'cut/bind
-    ("bind can not occur in type-arrow~%")
+    ("bind can not occur in body-arrow~%")
     ("bind : ~a~%" j)))
 
 (define (cut/call j)
@@ -753,7 +791,7 @@
 
 (define (cut/arrow j)
   (debug0 'cut/arrow
-    ("arrow can not occur in type-arrow~%")
+    ("arrow can not occur in body-arrow~%")
     ("arrow : ~a~%" j)))
 
 (define (cut/lambda j)
@@ -835,8 +873,8 @@
        (cond [(uni-var/eq? d1 d2) #t] ;; no self-cover
              [else (cover/uni-var/data d1 d2)])]
 
-      [{{'trunk t k i} {'uni-var id level}} (cover/trunk/uni-var d1 d2)]
-      [{{'uni-var id level} {'trunk t k i}} (cover/uni-var/trunk d1 d2)]
+      [{{'trunk adl sdl k i} {'uni-var id level}} (cover/trunk/uni-var d1 d2)]
+      [{{'uni-var id level} {'trunk adl sdl k i}} (cover/uni-var/trunk d1 d2)]
 
       [{{'uni-var id level} __} (cover/uni-var/data d1 d2)]
       [{__ {'uni-var id level}} #f] ;; different from unify/data/data
@@ -854,9 +892,10 @@
 
       ;; trunk is the tricky part
       ;;   semantic equal is used
-      [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}} (cover/trunk/trunk d1 d2)]
-      [{{'trunk t k i} __} (cover/trunk/data d1 d2)]
-      [{__ {'trunk t k i}} (cover/data/trunk d1 d2)]
+      [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
+       (cover/trunk/trunk d1 d2)]
+      [{{'trunk adl sdl k i} __} (cover/trunk/data d1 d2)]
+      [{__ {'trunk adl sdl k i}} (cover/data/trunk d1 d2)]
 
       ;; others use syntax equal
       [{__ __} (equal? d1 d2)])))
@@ -913,10 +952,10 @@
            ;; when both fail to try-trunk
            ;;   still have chance to syntax equal
            (match {t1 t2}
-             [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}}
+             [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
               (match {(vector-ref k1 0) (vector-ref k2 0)}
                 [{{'todo b1 dl1} {'todo b2 dl2}}
-                 (cond [(equal? {t1 i1 b1} {t2 i2 b2})
+                 (cond [(equal? {adl1 sdl1 i1 b1} {adl2 sdl2 i2 b2})
                         (push gs (% gsp-proto
                                     'ex cover
                                     'end gs/exit
@@ -959,8 +998,8 @@
        (cond [(uni-var/eq? d1 d2) #t] ;; no self-unify
              [else (unify/uni-var/data d1 d2)])]
 
-      [{{'trunk t k i} {'uni-var id level}} (unify/trunk/uni-var d1 d2)]
-      [{{'uni-var id level} {'trunk t k i}} (unify/uni-var/trunk d1 d2)]
+      [{{'trunk adl sdl k i} {'uni-var id level}} (unify/trunk/uni-var d1 d2)]
+      [{{'uni-var id level} {'trunk adl sdl k i}} (unify/uni-var/trunk d1 d2)]
 
       [{{'uni-var id level} __} (unify/uni-var/data d1 d2)]
       [{__ {'uni-var id level}} (unify/uni-var/data d2 d1)]
@@ -978,9 +1017,10 @@
 
       ;; trunk is the tricky part
       ;;   semantic equal is used
-      [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}} (unify/trunk/trunk d1 d2)]
-      [{{'trunk t k i} __} (unify/trunk/data d1 d2)]
-      [{__ {'trunk t k i}} (unify/data/trunk d1 d2)]
+      [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
+       (unify/trunk/trunk d1 d2)]
+      [{{'trunk adl sdl k i} __} (unify/trunk/data d1 d2)]
+      [{__ {'trunk adl sdl k i}} (unify/data/trunk d1 d2)]
 
       ;; others use syntax equal
       [{__ __} (equal? d1 d2)])))
@@ -1037,10 +1077,10 @@
            ;; when both fail to try-trunk
            ;;   still have chance to syntax equal
            (match {t1 t2}
-             [{{'trunk t1 k1 i1} {'trunk t2 k2 i2}}
+             [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
               (match {(vector-ref k1 0) (vector-ref k2 0)}
                 [{{'todo b1 dl1} {'todo b2 dl2}}
-                 (cond [(equal? {t1 i1 b1} {t2 i2 b2})
+                 (cond [(equal? {adl1 sdl1 i1 b1} {adl2 sdl2 i2 b2})
                         (push gs (% gsp-proto
                                     'ex unify
                                     'end gs/exit
@@ -1052,22 +1092,58 @@
 ;; although we can handle multi-return-value
 ;;   but one trunk only return one value
 ;;   a multi-return-value function will return many trunks
+
+;; (define (try-trunk t)
+;;   (: trunk -> (or #f data))
+;;   (match t
+;;     [{'trunk adl sdl k i}
+;;      (match (vector-ref k 0)
+;;        [{'done dl} (list-ref dl i)]
+;;        [{'todo b dl}
+;;         (let* ([rl (call-with-output-to-new-ds
+;;                     (lambda ()
+;;                       (push-list ds dl)
+;;                       ;; ><><><
+;;                       (compose/body a b)))]
+;;                [r (list-ref rl i)])
+;;           (if3 [(equal? r t)]
+;;                [#f]
+;;                [(update-trunky k {'done rl})
+;;                 r]))])]))
+
+(define (update-trunky k0 k)
+  (vector-set! k0 0 k))
+
 (define (try-trunk t)
   (: trunk -> (or #f data))
   (match t
-    [{'trunk a k i}
+    [{'trunk adl sdl k i}
      (match (vector-ref k 0)
        [{'done dl} (list-ref dl i)]
        [{'todo b dl}
-        (let* ([rl (call-with-output-to-new-ds
-                    (lambda ()
-                      (push-list ds dl)
-                      (compose/body a b)))]
-               [r (list-ref rl i)])
-          (if3 [(equal? r t)]
-               [#f]
-               [(vector-set! k 0 rl)
-                r]))])]))
+        (let* ([ds0 ds]
+               [bs0 bs]
+               [gs0 gs]
+               [result
+                (let ()
+                  (push-list ds dl)
+                  (compose/try-body b))])
+          (match result
+            [{sjj vrc}
+             (list-ref (update-trunky k (call-with-output-to-new-ds
+                                         (lambda ()
+                                           (push rs (% rsp-proto
+                                                       'ex   compose
+                                                       'end  rs/exit
+                                                       'vrc  vrc
+                                                       'jj   sjj))
+                                           (rs/next))))
+                       i)]
+            [#f
+             (set! ds ds0)
+             (set! bs bs0)
+             (set! gs gs0)
+             #f]))])]))
 
 (define (occur-check/data uv d)
   (: fresh-uni-var data -> bool)

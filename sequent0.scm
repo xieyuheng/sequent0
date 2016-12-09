@@ -549,15 +549,17 @@
             (compose/body a al)])))]))
 
 (: [for the first covering arrow]
-   <data-on-the-stack>
-   <point>
-   (push rs {compose exit <antecedent>})
-   <ds/gather>
-   (push gs {cover commit <gathered>})
-   succ -> commit (<loop>)
-   fail -> undo
-   (push rs {compose exit <succedent>})
-   all fail -> form trunk)
+   (push gs {cover commit
+                   <data-on-the-stack>
+                   (push rs {compose exit <ac>})})
+   (cond [(succ?)
+          (commit)
+          (push rs {compose exit <sc>})
+          (exit)]
+         [(fail?)
+          (undo)
+          (loop)])
+   (if (all-fail?) (form-trunk)))
 
 (define (compose/body t b)
   ;; note that
@@ -816,10 +818,6 @@
             (gs/next)
             #f)])))
 
-;; - -(cover/data/data
-;;     (uni-var #((:m . 219) ()) 0)
-;;     (uni-var #((:m . 211) ()) 0))
-;; - -#<void>
 (define (cover/data/data d1 d2)
   (: data data -> bool)
   ;; var -walk-> fresh-var
@@ -841,8 +839,7 @@
       [{{'uni-var id level} {'trunk t k i}} (cover/uni-var/trunk d1 d2)]
 
       [{{'uni-var id level} __} (cover/uni-var/data d1 d2)]
-      [{__ {'uni-var id level}} #f]
-      ;; different from unify/data/data
+      [{__ {'uni-var id level}} #f] ;; different from unify/data/data
 
       ;; cons push gs
       [{{'cons n1 dl1} {'cons n2 dl2}}
@@ -881,13 +878,12 @@
         #t]
        [#f]))
 
-;; different from unify/data/data
 (define (cover/trunk/uni-var t uv)
   (: trunk fresh-uni-var -> bool)
   (let ([result (try-trunk t)])
     (if result
       (cover/data/data result uv)
-      #f)))
+      #f))) ;; different from unify/data/data
 
 (define (cover/uni-var/trunk uv t)
   (: fresh-uni-var trunk -> bool)
@@ -1222,20 +1218,6 @@
                                    'ex  cut
                                    'vrc vrc
                                    'jj  ajj))
-                       (rs/next)))]
-            [dl-tsjj (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs (% rsp-proto
-                                    'ex  compose
-                                    'vrc tvrc
-                                    'jj  tsjj))
-                        (rs/next)))]
-            [dl-sjj (call-with-output-to-new-ds
-                     (lambda ()
-                       (push rs (% rsp-proto
-                                   'ex  cut
-                                   'vrc vrc
-                                   'jj  sjj))
                        (rs/next)))])
        (: ><><><
           in lack of bind-unify
@@ -1247,21 +1229,35 @@
                          'dl+    dl-ajj
                          'dl-    dl-tajj))
              (gs/next)]
-            [(if3 [(push gs (% gsp-proto
-                               'ex     cover
-                               'dl+    dl-sjj
-                               'dl-    dl-tsjj))
-                   (gs/next)]
-                  [(set! ds ds0)
-                   (set! bs bs0)
-                   (set! gs gs0)
-                   #t]
-                  [(debug0 'type-check/arrow
-                     ("cover fail~%")
-                     ("tsjj : ~a~%" tsjj)
-                     ("dl-tsjj : ~a~%" dl-tsjj)
-                     ("sjj : ~a~%" sjj)
-                     ("dl-sjj : ~a~%" dl-sjj))])]
+            [(let* ([dl-tsjj (call-with-output-to-new-ds
+                              (lambda ()
+                                (push rs (% rsp-proto
+                                            'ex  compose
+                                            'vrc tvrc
+                                            'jj  tsjj))
+                                (rs/next)))]
+                    [dl-sjj (call-with-output-to-new-ds
+                             (lambda ()
+                               (push rs (% rsp-proto
+                                           'ex  cut
+                                           'vrc vrc
+                                           'jj  sjj))
+                               (rs/next)))])
+               (if3 [(push gs (% gsp-proto
+                                 'ex     cover
+                                 'dl+    dl-sjj
+                                 'dl-    dl-tsjj))
+                     (gs/next)]
+                    [(set! ds ds0)
+                     (set! bs bs0)
+                     (set! gs gs0)
+                     #t]
+                    [(debug0 'type-check/arrow
+                       ("cover fail~%")
+                       ("tsjj : ~a~%" tsjj)
+                       ("dl-tsjj : ~a~%" dl-tsjj)
+                       ("sjj : ~a~%" sjj)
+                       ("dl-sjj : ~a~%" dl-sjj))]))]
             [(debug0 'type-check/arrow
                ("unify fail~%")
                ("tajj : ~a~%" tajj)

@@ -1,0 +1,250 @@
+#+PROPERTY: tangle basic.scm
+#+title: basic
+
+* type
+
+  #+begin_src scheme
+  (def type
+    (type (-> [] [type])))
+  #+end_src
+
+* ><>< nat
+
+  #+begin_src scheme
+  (def nat
+    (type (-> [] [type])
+      zero (-> [] [nat])
+      succ (-> [nat] [nat])))
+
+  (def add
+    (lambda (-> [nat nat] [nat])
+      (-> [:m zero] [:m])
+      (-> [:m :n succ] [:m :n add succ])))
+
+  (def mul
+    (lambda (-> [nat nat] [nat])
+      (-> [:m zero] [zero])
+      (-> [:m :n succ] [:m :n mul :m add])))
+
+  (def factorial
+    (lambda (-> [nat] [nat])
+      (-> [zero] [zero succ])
+      (-> [:n succ] [:n factorial :n succ mul])))
+
+  (: (def nat-induction
+       (lambda (-> [(-> [nat] [type]) %:p
+                    zero :p @
+                    (-> [nat %:k :k :p @]
+                        [:k succ :p @])
+                    nat %:x]
+                   [:x :p @])
+         (-> [:p :p/z :p/s zero] [:p/z])
+         (-> [:p :p/z :p/s :n succ]
+             [:n
+              :p :p/z :p/s :n nat-induction
+              :p/s @]))))
+  #+end_src
+
+* stack
+  #+begin_src scheme
+  (def drop
+    (lambda (-> [:t] [])
+      (-> [:d]
+          [])))
+
+  (def dup
+    (lambda (-> [:t] [:t :t])
+      (-> [:d]
+          [:d :d])))
+
+  (def over
+    (lambda (-> [:t1 :t2] [:t1 :t2 :t1])
+      (-> [:d1 :d2]
+          [:d1 :d2 :d1])))
+
+  (def tuck
+    (lambda (-> [:t1 :t2] [:t2 :t1 :t2])
+      (-> [:d1 :d2]
+          [:d2 :d1 :d2])))
+
+  (def swap
+    (lambda (-> [:t1 :t2] [:t2 :t1])
+      (-> [:d1 :d2]
+          [:d2 :d1])))
+
+  #+end_src
+
+* test
+
+  #+begin_src scheme
+  (run zero succ
+       zero succ succ
+       add)
+
+  (run drop)
+
+  (run zero succ succ succ
+       zero succ succ succ
+       mul)
+
+  (run drop)
+
+  (run zero succ succ succ
+       factorial)
+
+  (run drop)
+  #+end_src
+
+* list
+
+  #+begin_src scheme
+  (def list
+    (type (-> [type] [type])
+      null (-> [] [:t list])
+      cons (-> [:t list :t] [:t list])))
+
+  (def append
+    (lambda (-> [:t list :t list] [:t list])
+      (-> [:l null] [:l])
+      (-> [:l :r :e cons] [:l :r append :e cons])))
+
+  (def length
+    (lambda (-> [:t list] [nat])
+      (-> [null] [zero])
+      (-> [:l :e cons] [:l length succ])))
+
+  (def map
+    (lambda (-> [:t1 list (-> [:t1] [:t2])]
+                [:t2 list])
+      (-> [null :f] [null])
+      (-> [:l :e cons :f] [:l :f map :e :f @ cons])))
+  #+end_src
+
+* test
+
+  #+begin_src scheme
+  (run null zero cons)
+
+  (run drop)
+
+  (run null
+       zero cons
+       null
+       zero cons
+       append)
+
+  (run drop)
+
+  (run null
+       zero cons
+       zero cons
+       null
+       zero cons
+       zero cons
+       append
+       length)
+
+  (run drop)
+
+  (run null
+       zero cons
+       zero cons
+       (lambda (-> [nat] [nat])
+         (-> [zero] [zero succ]))
+       map)
+
+  (run drop)
+
+  (run null
+       zero cons
+       zero cons
+       zero cons
+       null
+       zero cons
+       zero cons
+       zero cons
+       append
+       (lambda (-> [nat] [nat])
+         (-> [zero] [zero succ]))
+       map)
+
+  (run drop)
+  #+end_src
+
+* has-length
+
+  #+begin_src scheme
+  (def has-length
+    (type (-> [:t list nat] [type])
+      null/has-length (-> [] [null zero has-length])
+      cons/has-length (-> [:l :n has-length]
+                          [:l :a cons :n succ has-length])))
+
+  (: (def map/has-length
+       (lambda (-> [:l :n has-length]
+                   [:l :f map :n has-length])
+         (-> [null/has-length] [null/has-length])
+         (-> [:h cons/has-length] [:h map/has-length cons/has-length]))))
+  #+end_src
+
+* vector
+
+  #+begin_src scheme
+  (def vector
+    (type (-> [nat type] [type])
+      null (-> [] [zero :t vector])
+      cons (-> [:n :t vector :t]
+               [:n succ :t vector])))
+
+  (def append
+    (lambda (-> [:m :t vector :n :t vector]
+                [:m :n add :t vector])
+      (-> [:l null] [:l])
+      (-> [:l :r :e cons]
+          [:l :r append :e cons])))
+
+  (def map
+    (lambda (-> [:n :t1 vector (-> [:t1] [:t2])]
+                [:n :t2 vector])
+      (-> [null :f] [null])
+      (-> [:l :e cons :f] [:l :f map :e :f @ cons])))
+  #+end_src
+
+* test
+
+  #+begin_src scheme
+  (run null
+       zero cons
+       zero cons
+       zero cons
+       null
+       zero cons
+       zero cons
+       zero cons
+       append)
+
+  (run drop)
+
+  (run null
+       zero cons
+       zero cons
+       zero cons
+       null
+       zero cons
+       zero cons
+       zero cons
+       append
+       (lambda (-> [nat] [nat])
+         (-> [zero] [zero succ]))
+       map)
+
+  (run drop)
+  #+end_src
+
+* ><>< fraction
+
+  #+begin_src scheme
+  (def fraction
+    (type (-> [type %:t] [type])
+      fline (-> [:t dup] [:t fraction])))
+  #+end_src

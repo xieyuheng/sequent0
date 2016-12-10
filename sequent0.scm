@@ -31,8 +31,12 @@
 
 (: trunky
    todo               {uni-arrow ...} {data ...}
-   kvar               uni-var {data ...}
+   kvar               kv {data ...}
    done               {data ...})
+
+(: kv
+   uni-var ~
+   uni-lambda ~)
 
 (define-syntax debug0
   (syntax-rules ()
@@ -428,7 +432,7 @@
     k 0
     (match (vector-ref k 0)
       [{'todo al dl} {'todo al (bs/deep-list dl)}]
-      [{'kvar uv dl} {'kvar (bs/deep uv) (bs/deep-list dl)}]
+      [{'kvar kv dl} {'kvar (bs/deep kv) (bs/deep-list dl)}]
       [{'done dl}    {'done (bs/deep-list dl)}]))
   k)
 
@@ -972,17 +976,19 @@
              [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
               (match {(vector-ref k1 0) (vector-ref k2 0)}
                 [{{'todo b1 dl1} {'todo b2 dl2}}
-                 (cond [(equal? {adl1 sdl1 i1 b1} {adl2 sdl2 i2 b2})
-                        (push gs (% gsp-proto
-                                    'ex (unify 'unify)
-                                    'end gs/exit
-                                    'dl+ dl1
-                                    'dl- dl2))
-                        (gs/next)]
-                       [else #f])]
-                [{{'kvar uv1 dl1} {'kvar uv2 dl2}}
-                 ><><><
-                 ])])])))
+                 (if3 [(equal? {adl1 sdl1 i1 b1}
+                               {adl2 sdl2 i2 b2})]
+                      [(push gs (% gsp-proto
+                                   'ex (unify 'unify)
+                                   'end gs/exit
+                                   'dl+ dl1
+                                   'dl- dl2))
+                       (gs/next)]
+                      [#f])]
+                ;; maybe ><><>< handle 'kvar here
+                ;; [{{'kvar kv1 dl1} {'kvar kv2 dl2}}
+                ;;  ]
+                [__ #f])])])))
 
 ;; ><><><
 ;; need bind-unify for adl of cons and dl
@@ -1078,7 +1084,7 @@
 ;;   but one trunk only return one value
 ;;   a multi-return-value function will return many trunks
 
-(define (update-trunky k0 k)
+(define (update-trunky! k0 k)
   (vector-set! k0 0 k))
 
 (define (try-trunk t)
@@ -1087,9 +1093,13 @@
     [{'trunk adl sdl k i}
      (match (vector-ref k 0)
        [{'done dl} (list-ref dl i)]
-       [{'kvar uv dl}
-        ><><><
-        ]
+       [{'kvar kv dl}
+        (match (bs/deep kv)
+          [{'uni-lambda a al}
+           ;; not check for type-arrow here
+           (update-trunky! k {'todo al dl})
+           (try-trunk t)]
+          [__ #f])]
        [{'todo b dl}
         (let* ([ds0 ds]
                [bs0 bs]
@@ -1100,14 +1110,14 @@
                   (compose/try-body b))])
           (match result
             [{sjj vrc}
-             (list-ref (update-trunky k (call-with-output-to-new-ds
-                                         (lambda ()
-                                           (push rs (% rsp-proto
-                                                       'ex   compose
-                                                       'end  rs/exit
-                                                       'vrc  vrc
-                                                       'jj   sjj))
-                                           (rs/next))))
+             (list-ref (update-trunky! k (call-with-output-to-new-ds
+                                          (lambda ()
+                                            (push rs (% rsp-proto
+                                                        'ex   compose
+                                                        'end  rs/exit
+                                                        'vrc  vrc
+                                                        'jj   sjj))
+                                            (rs/next))))
                        i)]
             [#f
              (set! ds ds0)
@@ -1139,7 +1149,7 @@
     [{'trunk t k i}
      (match (vector-ref k 0)
        [{'todo b dl} (occur-check/data-list uv dl)]
-       [{'kvar uv1 dl} (occur-check/data-list uv (cons uv1 dl))]
+       [{'kvar kv1 dl} (occur-check/data-list uv (cons kv1 dl))]
        [{'done dl}   (occur-check/data-list uv dl)])]))
 
 (define print-define-flag #f)

@@ -460,13 +460,13 @@
    (pair-list
     'print
     (lambda (o)
-      (cat ("<rsp>~%")
-           ("  :counter: ~a~%"       (^ o 'c))
-           ("  :explainer: ~a~%"     (^ o 'ex))
-           ("  :ender: ~a~%"         (^ o 'end))
-           ("  :var-record:~%~a~%"   (^ o 'vrc))
-           ("  :jojo:~%~a~%"         (^ o 'jj))
-           ("</rsp>~%"))))))
+      (cat ("  <rsp>~%")
+           ("    :counter: ~a~%"       (^ o 'c))
+           ("    :explainer: ~a~%"     (^ o 'ex))
+           ("    :ender: ~a~%"         (^ o 'end))
+           ("    :var-record:~%~a~%"   (^ o 'vrc))
+           ("    :jojo:~%~a~%"         (^ o 'jj))
+           ("  </rsp>~%"))))))
 
 (define id/counter 0)
 
@@ -612,7 +612,7 @@
             [dl2 (pop-list ds (length dl1))])
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
-                         'ex   cover
+                         'ex   (unify 'cover)
                          'end  bs/commit
                          'dl+  dl1
                          'dl-  dl2))
@@ -624,7 +624,7 @@
              (compose/try-body r)]))]))
 
 ;; ><><><
-;; need bind-unify for adl and dl
+;; need after-d2t-unify for adl and dl
 (define (create-trunk-list t b dl)
   (match t
     [{'uni-arrow nl frc ajj sjj}
@@ -775,7 +775,7 @@
             [dl2 (pop-list ds (length dl1))])
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
-                         'ex   unify
+                         'ex   (unify 'unify)
                          'end  bs/commit
                          'dl+  dl1
                          'dl-  dl2))
@@ -831,32 +831,34 @@
    (pair-list
     'print
     (lambda (o)
-      (cat ("<gsp>~%")
-           ("  :counter: ~a~%"        (^ o 'c))
-           ("  :explainer: ~a~%"      (^ o 'ex))
-           ("  :ender: ~a~%"          (^ o 'end))
-           ("  :data-list+: ~%~a~%"   (^ o 'dl+))
-           ("  :data-list-: ~%~a~%"   (^ o 'dl-))
-           ("</gsp>~%"))))))
+      (cat ("  <gsp>~%")
+           ("    :counter: ~a~%"        (^ o 'c))
+           ("    :explainer: ~a~%"      (^ o 'ex))
+           ("    :ender: ~a~%"          (^ o 'end))
+           ("    :data-list+: ~%~a~%"   (^ o 'dl+))
+           ("    :data-list-: ~%~a~%"   (^ o 'dl-))
+           ("  </gsp>~%"))))))
 
-(define (cover)
-  (: -> bool)
-  (let* ([gsp (pop gs)]
-         [c   (^ gsp 'c)]
-         [ex  (^ gsp 'ex)]
-         [end (^ gsp 'end)]
-         [dl1 (^ gsp 'dl+)]
-         [dl2 (^ gsp 'dl-)])
-    (if3 [(>= c (length dl1))]
-         [(end)
-          #t]
-         [(push gs (% gsp 'c (+ 1 c)))
-          (if (cover/data/data (list-ref dl1 c)
-                               (list-ref dl2 c))
-            (gs/next)
-            #f)])))
+(define (unify m)
+  (: method -> (-> bool))
+  (lambda ()
+    (let* ([gsp (pop gs)]
+           [c   (^ gsp 'c)]
+           [ex  (^ gsp 'ex)]
+           [end (^ gsp 'end)]
+           [dl1 (^ gsp 'dl+)]
+           [dl2 (^ gsp 'dl-)])
+      (if3 [(>= c (length dl1))]
+           [(end)
+            #t]
+           [(push gs (% gsp 'c (+ 1 c)))
+            (if (unify/data/data m
+                                 (list-ref dl1 c)
+                                 (list-ref dl2 c))
+              (gs/next)
+              #f)]))))
 
-(define (cover/data/data d1 d2)
+(define (unify/data/data m d1 d2)
   (: data data -> bool)
   ;; var -walk-> fresh-var
   (let ([d1 (bs/walk d1)]
@@ -864,151 +866,29 @@
     (match {d1 d2}
       ;; ignore the sub-data
       ;;   for it is used by top-level type-check
-      [{{'uni-bind uv d} __} (cover/data/data d d2)]
-      [{__ {'uni-bind uv d}} (cover/data/data d1 d)]
-
-      ;; var is the hero
-      ;; this should pass occur-check
-      [{{'uni-var id1 level1} {'uni-var id2 level2}}
-       (cond [(uni-var/eq? d1 d2) #t] ;; no self-cover
-             [else (cover/uni-var/data d1 d2)])]
-
-      [{{'trunk adl sdl k i} {'uni-var id level}} (cover/trunk/uni-var d1 d2)]
-      [{{'uni-var id level} {'trunk adl sdl k i}} (cover/uni-var/trunk d1 d2)]
-
-      [{{'uni-var id level} __} (cover/uni-var/data d1 d2)]
-      [{__ {'uni-var id level}} #f] ;; different from unify/data/data
-
-      ;; cons push gs
-      [{{'cons n1 dl1} {'cons n2 dl2}}
-       (cond [(eq? n1 n2)
-              (push gs (% gsp-proto
-                          'ex cover
-                          'end gs/exit
-                          'dl+ dl1
-                          'dl- dl2))
-              (gs/next)]
-             [else #f])]
-
-      ;; trunk is the tricky part
-      ;;   semantic equal is used
-      [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
-       (cover/trunk/trunk d1 d2)]
-      [{{'trunk adl sdl k i} __} (cover/trunk/data d1 d2)]
-      [{__ {'trunk adl sdl k i}} (cover/data/trunk d1 d2)]
-
-      ;; others use syntax equal
-      [{__ __} (equal? d1 d2)])))
-
-;; ;; the equal? of scheme can handle circle
-;; (let ([p1 (cons 1 1)]
-;;       [p2 (cons 1 1)])
-;;   (set-cdr! p1 p1)
-;;   (set-cdr! p2 p2)
-;;   (list p1 p2 (equal? p1 p2)))
-;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
-
-(define (cover/uni-var/data uv d)
-  (: fresh-uni-var data -> bool)
-  ;; no consistent-check
-  ;;   because we do not have infer
-  (if3 [(occur-check/data uv d)]
-       [(bs/extend uv d)
-        #t]
-       [#f]))
-
-(define (cover/trunk/uni-var t uv)
-  (: trunk fresh-uni-var -> bool)
-  (let ([result (try-trunk t)])
-    (if result
-      (cover/data/data result uv)
-      #f))) ;; different from unify/data/data
-
-(define (cover/uni-var/trunk uv t)
-  (: fresh-uni-var trunk -> bool)
-  (let ([result (try-trunk t)])
-    (if result
-      (cover/data/data uv result)
-      (cover/uni-var/data uv t))))
-
-(define (cover/trunk/data t d)
-  (let ([result (try-trunk t)])
-    (if result
-      (cover/data/data result d)
-      #f)))
-
-(define (cover/data/trunk d t)
-  (let ([result (try-trunk t)])
-    (if result
-      (cover/data/data d result)
-      #f)))
-
-(define (cover/trunk/trunk t1 t2)
-  (let ([result1 (try-trunk t1)]
-        [result2 (try-trunk t2)])
-    (cond [result1 (cover/data/trunk result1 t2)]
-          [result2 (cover/trunk/data t1 result2)]
-          [else
-           ;; when both fail to try-trunk
-           ;;   still have chance to syntax equal
-           (match {t1 t2}
-             [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
-              (match {(vector-ref k1 0) (vector-ref k2 0)}
-                [{{'todo b1 dl1} {'todo b2 dl2}}
-                 (cond [(equal? {adl1 sdl1 i1 b1} {adl2 sdl2 i2 b2})
-                        (push gs (% gsp-proto
-                                    'ex cover
-                                    'end gs/exit
-                                    'dl+ dl1
-                                    'dl- dl2))
-                        (gs/next)]
-                       [else #f])])])])))
-
-(define (unify)
-  (: -> bool)
-  (let* ([gsp (pop gs)]
-         [c   (^ gsp 'c)]
-         [ex  (^ gsp 'ex)]
-         [end (^ gsp 'end)]
-         [dl1 (^ gsp 'dl+)]
-         [dl2 (^ gsp 'dl-)])
-    (if3 [(>= c (length dl1))]
-         [(end)
-          #t]
-         [(push gs (% gsp 'c (+ 1 c)))
-          (if (unify/data/data (list-ref dl1 c)
-                               (list-ref dl2 c))
-            (gs/next)
-            #f)])))
-
-(define (unify/data/data d1 d2)
-  (: data data -> bool)
-  ;; var -walk-> fresh-var
-  (let ([d1 (bs/walk d1)]
-        [d2 (bs/walk d2)])
-    (match {d1 d2}
-      ;; ignore the sub-data
-      ;;   for it is used by top-level type-check
-      [{{'uni-bind uv d} __} (unify/data/data d d2)]
-      [{__ {'uni-bind uv d}} (unify/data/data d1 d)]
+      [{{'uni-bind uv d} __} (unify/data/data m d d2)]
+      [{__ {'uni-bind uv d}} (unify/data/data m d1 d)]
 
       ;; var is the hero
       ;; this should pass occur-check
       [{{'uni-var id1 level1} {'uni-var id2 level2}}
        (cond [(uni-var/eq? d1 d2) #t] ;; no self-unify
-             [else (unify/uni-var/data d1 d2)])]
+             [else (unify/uni-var/data m d1 d2)])]
 
-      [{{'trunk adl sdl k i} {'uni-var id level}} (unify/trunk/uni-var d1 d2)]
-      [{{'uni-var id level} {'trunk adl sdl k i}} (unify/uni-var/trunk d1 d2)]
+      [{{'trunk adl sdl k i} {'uni-var id level}} (unify/trunk/uni-var m d1 d2)]
+      [{{'uni-var id level} {'trunk adl sdl k i}} (unify/uni-var/trunk m d1 d2)]
 
-      [{{'uni-var id level} __} (unify/uni-var/data d1 d2)]
-      [{__ {'uni-var id level}} (unify/uni-var/data d2 d1)]
+      [{{'uni-var id level} __} (unify/uni-var/data m d1 d2)]
+      [{__ {'uni-var id level}}
+       (case m
+         ['cover #f]
+         ['unify (unify/uni-var/data m d2 d1)])]
 
       ;; cons push gs
       [{{'cons n1 dl1} {'cons n2 dl2}}
        (cond [(eq? n1 n2)
               (push gs (% gsp-proto
-                          'ex unify
+                          'ex (unify 'unify)
                           'end gs/exit
                           'dl+ dl1
                           'dl- dl2))
@@ -1018,9 +898,9 @@
       ;; trunk is the tricky part
       ;;   semantic equal is used
       [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
-       (unify/trunk/trunk d1 d2)]
-      [{{'trunk adl sdl k i} __} (unify/trunk/data d1 d2)]
-      [{__ {'trunk adl sdl k i}} (unify/data/trunk d1 d2)]
+       (unify/trunk/trunk m d1 d2)]
+      [{{'trunk adl sdl k i} __} (unify/trunk/data m d1 d2)]
+      [{__ {'trunk adl sdl k i}} (unify/data/trunk m d1 d2)]
 
       ;; others use syntax equal
       [{__ __} (equal? d1 d2)])))
@@ -1033,7 +913,7 @@
 ;;   (list p1 p2 (equal? p1 p2)))
 ;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
 
-(define (unify/uni-var/data uv d)
+(define (unify/uni-var/data m uv d)
   (: fresh-var data -> bool)
   ;; no consistent-check
   ;;   because we do not have infer
@@ -1041,38 +921,39 @@
     (bs/extend uv d)
     #f))
 
-;; different from unify/data/data
-(define (unify/trunk/uni-var t uv)
+(define (unify/trunk/uni-var m t uv)
   (: trunk fresh-uni-var -> bool)
   (let ([result (try-trunk t)])
     (if result
-      (unify/data/data result uv)
-      (unify/data/uni-var t uv))))
+      (unify/data/data m result uv)
+      (case m
+        ['cover #f]
+        ['unify (unify/data/uni-var m t uv)]))))
 
-(define (unify/uni-var/trunk uv t)
+(define (unify/uni-var/trunk m uv t)
   (: fresh-uni-var trunk -> bool)
   (let ([result (try-trunk t)])
     (if result
-      (unify/data/data uv result)
-      (unify/uni-var/data uv t))))
+      (unify/data/data m uv result)
+      (unify/uni-var/data m uv t))))
 
-(define (unify/trunk/data t d)
+(define (unify/trunk/data m t d)
   (let ([result (try-trunk t)])
     (if result
-      (unify/data/data result d)
+      (unify/data/data m result d)
       #f)))
 
-(define (unify/data/trunk d t)
+(define (unify/data/trunk m d t)
   (let ([result (try-trunk t)])
     (if result
-      (unify/data/data d result)
+      (unify/data/data m d result)
       #f)))
 
-(define (unify/trunk/trunk t1 t2)
+(define (unify/trunk/trunk m t1 t2)
   (let ([result1 (try-trunk t1)]
         [result2 (try-trunk t2)])
-    (cond [result1 (unify/data/trunk result1 t2)]
-          [result2 (unify/trunk/data t1 result2)]
+    (cond [result1 (unify/data/trunk m result1 t2)]
+          [result2 (unify/trunk/data m t1 result2)]
           [else
            ;; when both fail to try-trunk
            ;;   still have chance to syntax equal
@@ -1082,7 +963,7 @@
                 [{{'todo b1 dl1} {'todo b2 dl2}}
                  (cond [(equal? {adl1 sdl1 i1 b1} {adl2 sdl2 i2 b2})
                         (push gs (% gsp-proto
-                                    'ex unify
+                                    'ex (unify 'unify)
                                     'end gs/exit
                                     'dl+ dl1
                                     'dl- dl2))
@@ -1092,24 +973,6 @@
 ;; although we can handle multi-return-value
 ;;   but one trunk only return one value
 ;;   a multi-return-value function will return many trunks
-
-;; (define (try-trunk t)
-;;   (: trunk -> (or #f data))
-;;   (match t
-;;     [{'trunk adl sdl k i}
-;;      (match (vector-ref k 0)
-;;        [{'done dl} (list-ref dl i)]
-;;        [{'todo b dl}
-;;         (let* ([rl (call-with-output-to-new-ds
-;;                     (lambda ()
-;;                       (push-list ds dl)
-;;                       ;; ><><><
-;;                       (compose/body a b)))]
-;;                [r (list-ref rl i)])
-;;           (if3 [(equal? r t)]
-;;                [#f]
-;;                [(update-trunky k {'done rl})
-;;                 r]))])]))
 
 (define (update-trunky k0 k)
   (vector-set! k0 0 k))
@@ -1301,7 +1164,7 @@
           (push rs {compose <antecedent>})
           (push gs {bind-unify <gathered>}))
        (if3 [(push gs (% gsp-proto
-                         'ex     unify
+                         'ex     (unify 'unify)
                          'dl+    dl-ajj
                          'dl-    dl-tajj))
              (gs/next)]
@@ -1320,7 +1183,7 @@
                                            'jj  sjj))
                                (rs/next)))])
                (if3 [(push gs (% gsp-proto
-                                 'ex     cover
+                                 'ex     (unify 'cover)
                                  'dl+    dl-sjj
                                  'dl-    dl-tsjj))
                      (gs/next)]

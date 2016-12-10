@@ -31,6 +31,7 @@
 
 (: trunky
    todo               {uni-arrow ...} {data ...}
+   kvar               uni-var {data ...}
    done               {data ...})
 
 (define-syntax debug0
@@ -427,6 +428,7 @@
     k 0
     (match (vector-ref k 0)
       [{'todo al dl} {'todo al (bs/deep-list dl)}]
+      [{'kvar uv dl} {'kvar (bs/deep uv) (bs/deep-list dl)}]
       [{'done dl}    {'done (bs/deep-list dl)}]))
   k)
 
@@ -645,18 +647,14 @@
                                 'vrc  vrc
                                 'jj   sjj))
                     (rs/next)))]
-            [k (vector {'todo b dl})])
+            [k (match b
+                 [('uni-var . __)
+                  (vector {'kvar b dl})]
+                 [__
+                  (vector {'todo b dl})])])
        (reverse
         (map (lambda (i) {'trunk adl sdl k i})
           (genlist (length sdl)))))]))
-
-;; (define (create-trunk-list t b dl)
-;;   (match t
-;;     [{'uni-arrow nl frc ajj sjj}
-;;      (let* ([k (vector {'todo b dl})])
-;;        (reverse
-;;         (map (lambda (i) {'trunk t k i})
-;;           (genlist (type/output-number t)))))]))
 
 (define (type/input-number t)
   (match t
@@ -696,11 +694,25 @@
      (push ds {'uni-lambda (arrow->uni-arrow a)
                            (map arrow->uni-arrow al)})]))
 
+;; note that
+;;   compose/apply can form trunk too
+;;   the body of trunk formed by apply is uni-var
 (define (compose/apply j)
   (let ([d (bs/walk (pop ds))])
     (match d
       [{'uni-lambda t b}
        (compose/body t b)]
+      [{'uni-var id level}
+       (let* ([t (d2t d)]
+              [b d])
+         (match t
+           [{'uni-arrow nl frc ajj sjj}
+            (let ([dl (pop-list ds (type/input-number t))])
+              (push-list ds (create-trunk-list t b dl)))]
+           [__ (debug0 'compose/apply
+                 ("compose/apply meet uni-var whoes type is not uni-arrow~%")
+                 ("uni-var : ~a~%" d)
+                 ("type of uni-var : ~a~%" t))]))]
       [__
        (debug0 'compose/apply
          ("compose/apply can not apply data~%")
@@ -839,6 +851,13 @@
            ("    :data-list-: ~%~a~%"   (^ o 'dl-))
            ("  </gsp>~%"))))))
 
+(: (let ([p1 (cons 1 1)]
+         [p2 (cons 1 1)])
+     (set-cdr! p1 p1)
+     (set-cdr! p2 p2)
+     (list p1 p2 (equal? p1 p2))))
+(: (#0=(1 . #0#) #1=(1 . #1#) #t))
+
 (define (unify m)
   (: method -> (-> bool))
   (lambda ()
@@ -905,14 +924,6 @@
       ;; others use syntax equal
       [{__ __} (equal? d1 d2)])))
 
-;; ;; the equal? of scheme can handle circle
-;; (let ([p1 (cons 1 1)]
-;;       [p2 (cons 1 1)])
-;;   (set-cdr! p1 p1)
-;;   (set-cdr! p2 p2)
-;;   (list p1 p2 (equal? p1 p2)))
-;; ;; => (#0=(1 . #0#) #1=(1 . #1#) #t)
-
 (define (unify/uni-var/data m uv d)
   (: fresh-var data -> bool)
   ;; no consistent-check
@@ -968,7 +979,100 @@
                                     'dl+ dl1
                                     'dl- dl2))
                         (gs/next)]
-                       [else #f])])])])))
+                       [else #f])]
+                [{{'kvar uv1 dl1} {'kvar uv2 dl2}}
+                 ><><><
+                 ])])])))
+
+;; ><><><
+;; need bind-unify for adl of cons and dl
+(define (d2t d)
+  (define (a->sdl a)
+    (match a
+      [{'uni-arrow nl frc ajj sjj}
+       (let* ([vrc (append frc (nl->vrc nl))]
+              [adl (call-with-output-to-new-ds
+                    (lambda ()
+                      (push rs (% rsp-proto
+                                  'ex   compose
+                                  'end  rs/exit
+                                  'vrc  vrc
+                                  'jj   sjj))
+                      (rs/next)))]
+              [sdl (call-with-output-to-new-ds
+                    (lambda ()
+                      (push rs (% rsp-proto
+                                  'ex   compose
+                                  'end  rs/exit
+                                  'vrc  vrc
+                                  'jj   sjj))
+                      (rs/next)))])
+         sdl)]))
+  (match d
+    [{'uni-var id level} (bs/walk {'uni-var id (+ 1 level)})]
+    [{'uni-bind uv d1} d1]
+    [{'cons n dl}
+     (let ([found (assq n ns)])
+       (if (not found)
+         (debug0 'd2t ("unknow name : ~a~%" n))
+         (match (cdr found)
+           [{'meaning-type a n nl}
+            (car (a->sdl a))]
+           [{'meaning-data a n n0}
+            (car (a->sdl a))]
+           [{'meaning-lambda a al}
+            (debug0 'd2t
+              ("found a lambda from cons name : ~a~%" n)
+              ("lambda type : ~a~%" a)
+              ("lambda body : ~a~%" al))])))]
+    [('uni-arrow . __)
+     (debug0 'd2t
+       ("can not infer type from uni-arrow : ~a~%" d))]
+    [{'uni-lambda a al} a]
+    [{'trunk adl sdl k i}
+     ;; info about special branch is not needed
+     ;;   thus no need to try-trunk
+     ;; info about the dl is needed
+     ;;   it is already handled when creating the trunk
+     (list-ref sdl i)]))
+
+(define (up-unify m)
+  (: method -> (-> bool))
+  (lambda ()
+    (let* ([gsp (pop gs)]
+           [c   (^ gsp 'c)]
+           [ex  (^ gsp 'ex)]
+           [end (^ gsp 'end)]
+           [dl1 (^ gsp 'dl+)]
+           [dl2 (^ gsp 'dl-)])
+      (if3 [(>= c (length dl1))]
+           [(end)
+            #t]
+           [(push gs (% gsp 'c (+ 1 c)))
+            (if (up-unify/data/data m
+                                 (list-ref dl1 c)
+                                 (list-ref dl2 c))
+              (gs/next)
+              #f)]))))
+
+;; note that
+;;   up-unify vs unify
+;;   need not to be passed to nested structure
+;;   thus we can simply call unify in up-unify
+
+(define (up-unify/data/data m d1 d2)
+  (: data data -> bool)
+  ;; var -walk-> fresh-var
+  (let ([d1 (bs/walk d1)]
+        [d2 (bs/walk d2)])
+    (match {d1 d2}
+      ;; ignore the sub-data
+      ;;   for it is used by top-level type-check
+
+      ;; [{{'uni-bind uv d} __} (unify/data/data m (d2t d) d2)]
+      ;; [{__ {'uni-bind uv d}} (unify/data/data m (d2t d1) d)]
+
+      [{__ __} (unify/data/data m (d2t d1) d2)])))
 
 ;; although we can handle multi-return-value
 ;;   but one trunk only return one value
@@ -983,6 +1087,9 @@
     [{'trunk adl sdl k i}
      (match (vector-ref k 0)
        [{'done dl} (list-ref dl i)]
+       [{'kvar uv dl}
+        ><><><
+        ]
        [{'todo b dl}
         (let* ([ds0 ds]
                [bs0 bs]
@@ -1032,6 +1139,7 @@
     [{'trunk t k i}
      (match (vector-ref k 0)
        [{'todo b dl} (occur-check/data-list uv dl)]
+       [{'kvar uv1 dl} (occur-check/data-list uv (cons uv1 dl))]
        [{'done dl}   (occur-check/data-list uv dl)])]))
 
 (define print-define-flag #f)
@@ -1124,6 +1232,88 @@
   (for-each compose/jo (map compile-jo s))
   (print-ds))
 
+(:
+
+  (define (type-check ta al)
+    (: uni-arrow {uni-arrow ...} -> bool)
+    (match ta
+      [('uni-arrow . __)
+       (for-each (lambda (a) (type-check/arrow ta a))
+                 al)]
+      [__ (debug0 'type-check
+            ("type of function must be arrow~%")
+            ("type : ~a~%" ta))]))
+
+  (define (type-check/arrow ta a)
+    (: type-arrow arrow -> bool)
+    (match {ta a}
+      [{{'uni-arrow tnl tfrc tajj tsjj}
+        {'uni-arrow nl frc ajj sjj}}
+       (let* ([ds0 ds]
+              [bs0 bs]
+              [gs0 gs]
+              [tvrc (append tfrc (nl->vrc tnl))]
+              [vrc (append frc (nl->vrc nl))]
+              [dl-tajj (call-with-output-to-new-ds
+                        (lambda ()
+                          (push rs (% rsp-proto
+                                      'ex  compose
+                                      'vrc tvrc
+                                      'jj  tajj))
+                          (rs/next)))]
+              [dl-ajj (call-with-output-to-new-ds
+                       (lambda ()
+                         (push rs (% rsp-proto
+                                     'ex  cut
+                                     'vrc vrc
+                                     'jj  ajj))
+                         (rs/next)))])
+         (: ><><><
+            in lack of bind-unify
+            (push rs {compose <type-antecedent>})
+            (push rs {compose <antecedent>})
+            (push gs {bind-unify <gathered>}))
+         (if3 [(push gs (% gsp-proto
+                           'ex     (unify 'unify)
+                           'dl+    dl-ajj
+                           'dl-    dl-tajj))
+               (gs/next)]
+              [(let* ([dl-tsjj (call-with-output-to-new-ds
+                                (lambda ()
+                                  (push rs (% rsp-proto
+                                              'ex  compose
+                                              'vrc tvrc
+                                              'jj  tsjj))
+                                  (rs/next)))]
+                      [dl-sjj (call-with-output-to-new-ds
+                               (lambda ()
+                                 (push rs (% rsp-proto
+                                             'ex  cut
+                                             'vrc vrc
+                                             'jj  sjj))
+                                 (rs/next)))])
+                 (if3 [(push gs (% gsp-proto
+                                   'ex     (unify 'cover)
+                                   'dl+    dl-sjj
+                                   'dl-    dl-tsjj))
+                       (gs/next)]
+                      [(set! ds ds0)
+                       (set! bs bs0)
+                       (set! gs gs0)
+                       #t]
+                      [(debug0 'type-check/arrow
+                         ("cover fail~%")
+                         ("tsjj : ~a~%" tsjj)
+                         ("dl-tsjj : ~a~%" dl-tsjj)
+                         ("sjj : ~a~%" sjj)
+                         ("dl-sjj : ~a~%" dl-sjj))]))]
+              [(debug0 'type-check/arrow
+                 ("unify fail~%")
+                 ("tajj : ~a~%" tajj)
+                 ("dl-tajj : ~a~%" dl-tajj)
+                 ("ajj : ~a~%" ajj)
+                 ("ajj : ~a~%" dl-ajj))]))])))
+
 (define (type-check ta al)
   (: uni-arrow {uni-arrow ...} -> bool)
   (match ta
@@ -1154,17 +1344,12 @@
             [dl-ajj (call-with-output-to-new-ds
                      (lambda ()
                        (push rs (% rsp-proto
-                                   'ex  cut
+                                   'ex  compose
                                    'vrc vrc
                                    'jj  ajj))
                        (rs/next)))])
-       (: ><><><
-          in lack of bind-unify
-          (push rs {compose <type-antecedent>})
-          (push rs {compose <antecedent>})
-          (push gs {bind-unify <gathered>}))
        (if3 [(push gs (% gsp-proto
-                         'ex     (unify 'unify)
+                         'ex     (up-unify 'up-unify)
                          'dl+    dl-ajj
                          'dl-    dl-tajj))
              (gs/next)]
@@ -1178,12 +1363,12 @@
                     [dl-sjj (call-with-output-to-new-ds
                              (lambda ()
                                (push rs (% rsp-proto
-                                           'ex  cut
+                                           'ex  compose
                                            'vrc vrc
                                            'jj  sjj))
                                (rs/next)))])
                (if3 [(push gs (% gsp-proto
-                                 'ex     (unify 'cover)
+                                 'ex     (up-unify 'up-cover)
                                  'dl+    dl-sjj
                                  'dl-    dl-tsjj))
                      (gs/next)]

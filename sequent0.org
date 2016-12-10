@@ -3,7 +3,9 @@
 
 * todo
 
-  - fix up-unify
+  - fix compose/cons & compose/body
+
+  - fix d2t
 
   - need much more tests to show that type-check is 'safe'
     program that should not be checked
@@ -1253,11 +1255,9 @@
                       [__ #f])])])))
       #+end_src
 
-*** ><>< d2t
+*** ><><>< d2t
 
     #+begin_src scheme
-    ;; ><><><
-    ;; need bind-unify for adl of cons and dl
     (define (d2t d)
       (define (a->sdl a)
         (match a
@@ -1288,6 +1288,8 @@
            (if (not found)
              (debug0 'd2t ("unknow name : ~a~%" n))
              (match (cdr found)
+               ;; ><><><
+               ;; need bind-unify for adl of cons and dl
                [{'meaning-type a n nl}
                 (car (a->sdl a))]
                [{'meaning-data a n n0}
@@ -1334,7 +1336,7 @@
                     #f)]))))
       #+end_src
 
-***** >< up-unify/data/data
+***** up-unify/data/data
 
       #+begin_src scheme
       ;; note that
@@ -1351,8 +1353,11 @@
             ;; ignore the sub-data
             ;;   for it is used by top-level type-check
 
-            ;; [{{'uni-bind uv d} __} (unify/data/data m (d2t d) d2)]
-            ;; [{__ {'uni-bind uv d}} (unify/data/data m (d2t d1) d)]
+            [{{'uni-bind uv d} __}
+             (unify/data/data m (d2t d) d2)]
+            [{__ {'uni-bind uv d}}
+             (and (unify/data/data m (d2t d1) d)
+                  (unify/data/data m d1 uv))]
 
             [{__ __} (unify/data/data m (d2t d1) d2)])))
       #+end_src
@@ -1569,7 +1574,7 @@
       (print-ds))
     #+end_src
 
-*** ><>< type-check
+*** type-check
 
     #+begin_src scheme
     (define (type-check ta al)
@@ -1607,7 +1612,7 @@
                                        'jj  ajj))
                            (rs/next)))])
            (if3 [(push gs (% gsp-proto
-                             'ex     (up-unify 'up-unify)
+                             'ex     (up-unify 'unify)
                              'dl+    dl-ajj
                              'dl-    dl-tajj))
                  (gs/next)]
@@ -1626,7 +1631,7 @@
                                                'jj  sjj))
                                    (rs/next)))])
                    (if3 [(push gs (% gsp-proto
-                                     'ex     (up-unify 'up-cover)
+                                     'ex     (up-unify 'cover)
                                      'dl+    dl-sjj
                                      'dl-    dl-tsjj))
                          (gs/next)]

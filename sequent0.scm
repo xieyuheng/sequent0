@@ -886,8 +886,6 @@
                 ;;  ]
                 [__ #f])])])))
 
-;; ><><><
-;; need bind-unify for adl of cons and dl
 (define (d2t d)
   (define (a->sdl a)
     (match a
@@ -918,6 +916,8 @@
        (if (not found)
          (debug0 'd2t ("unknow name : ~a~%" n))
          (match (cdr found)
+           ;; ><><><
+           ;; need bind-unify for adl of cons and dl
            [{'meaning-type a n nl}
             (car (a->sdl a))]
            [{'meaning-data a n n0}
@@ -971,8 +971,11 @@
       ;; ignore the sub-data
       ;;   for it is used by top-level type-check
 
-      ;; [{{'uni-bind uv d} __} (unify/data/data m (d2t d) d2)]
-      ;; [{__ {'uni-bind uv d}} (unify/data/data m (d2t d1) d)]
+      [{{'uni-bind uv d} __}
+       (unify/data/data m (d2t d) d2)]
+      [{__ {'uni-bind uv d}}
+       (and (unify/data/data m (d2t d1) d)
+            (unify/data/data m d1 uv))]
 
       [{__ __} (unify/data/data m (d2t d1) d2)])))
 
@@ -1173,7 +1176,7 @@
                                    'jj  ajj))
                        (rs/next)))])
        (if3 [(push gs (% gsp-proto
-                         'ex     (up-unify 'up-unify)
+                         'ex     (up-unify 'unify)
                          'dl+    dl-ajj
                          'dl-    dl-tajj))
              (gs/next)]
@@ -1192,7 +1195,7 @@
                                            'jj  sjj))
                                (rs/next)))])
                (if3 [(push gs (% gsp-proto
-                                 'ex     (up-unify 'up-cover)
+                                 'ex     (up-unify 'cover)
                                  'dl+    dl-sjj
                                  'dl-    dl-tsjj))
                      (gs/next)]

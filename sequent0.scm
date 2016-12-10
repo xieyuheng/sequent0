@@ -346,7 +346,7 @@
                               bs))
          (push bs `(,id . ((,level . ,d))))))]))
 
-;; in compose/var & cut/var
+;; in compose/var
 ;;   extend bs whenever meet a new var
 ;;   this helps commit
 
@@ -721,110 +721,6 @@
        (debug0 'compose/apply
          ("compose/apply can not apply data~%")
          ("data : ~a~%" d))])))
-
-(define (cut)
-  (let* ([rsp (pop rs)]
-         [c   (^ rsp 'c)]
-         [ex  (^ rsp 'ex)]
-         [end (^ rsp 'end)]
-         [jj  (^ rsp 'jj)])
-    (if3 [(>= c (length jj))]
-         [(end)]
-         [(push rs (% rsp 'c (+ 1 c)))
-          (cut/jo (list-ref jj c))
-          (rs/next)])))
-
-(define (cut/jo j)
-  (case (car j)
-    ['var           (cut/var j)]
-    ['fvar          (cut/var j)]
-    ['bind          (cut/bind j)]
-    ['call          (cut/call j)]
-    ['arrow         (cut/arrow j)]
-    ['lambda        (cut/lambda j)]
-    ['apply         (cut/apply j)]))
-
-(define (cut/var j)
-  ;; (if (uni-var/fresh? j)
-  ;;   (bs/extend-new j))
-  (let* ([n (match j
-              [{'var n} n]
-              [{'fvar n} n])]
-         [uv (name->uni-var n)]
-         [d (bs/deep uv)])
-    (let ([found-d (bs/find-up uv)])
-      (if found-d
-        (push ds found-d)
-        (match uv
-          [{'uni-var id level}
-           (push ds {'uni-var id (+ 1 level)})])))))
-
-(define (cut/bind j)
-  (debug0 'cut/bind
-    ("bind can not occur in body-arrow~%")
-    ("bind : ~a~%" j)))
-
-(define (cut/call j)
-  (match j
-    [{'call n}
-     (let ([found (assq n ns)])
-       (if (not found)
-         (debug0 'cut/call
-           ("unknow name : ~a~%" n))
-         (match (cdr found)
-           [{'meaning-type a n nl} (cut/type a)]
-           [{'meaning-data a n n0} (cut/type a)]
-           [{'meaning-lambda a al} (cut/type a)])))]))
-
-(define (cut/type a)
-  (match a
-    [{'uni-arrow nl frc ajj sjj}
-     (let* ([vrc (append frc (nl->vrc nl))]
-            [dl1 (call-with-output-to-new-ds
-                  (lambda ()
-                    (push rs (% rsp-proto
-                                'ex   compose
-                                'end  rs/exit
-                                'vrc  vrc
-                                'jj   ajj))
-                    (rs/next)))]
-            [dl2 (pop-list ds (length dl1))])
-       (if3 [(push bs '(commit-point))
-             (push gs (% gsp-proto
-                         'ex   (unify 'unify)
-                         'end  bs/commit
-                         'dl+  dl1
-                         'dl-  dl2))
-             (gs/next)]
-            [(push rs (% rsp-proto
-                         'ex   compose
-                         'end  rs/exit
-                         'vrc  vrc
-                         'jj  sjj))
-             (rs/next)]
-            [(debug0 'cut/type
-               ("fail on unify~%"))]))]))
-
-(define (cut/arrow j)
-  (debug0 'cut/arrow
-    ("arrow can not occur in body-arrow~%")
-    ("arrow : ~a~%" j)))
-
-(define (cut/lambda j)
-  (match j
-    [{'lambda a al}
-     (compose/arrow a)]))
-
-(define (cut/apply j)
-  (let ([d (bs/walk (pop ds))])
-    (match d
-      [{'uni-arrow vnl fvnl ajj sjj}
-       (cut/type {'uni-arrow vnl fvnl ajj sjj})]
-      [__
-       (debug0 'cut/apply
-         ("cut/apply can not apply data~%")
-         ("data : ~a~%" d)
-         ("jo : ~a~%" j))])))
 
 ;; goal-stack
 ;;   binding-stack is to record solution of equations in goal-stack
@@ -1241,88 +1137,6 @@
 (define ($run s)
   (for-each compose/jo (map compile-jo s))
   (print-ds))
-
-(:
-
-  (define (type-check ta al)
-    (: uni-arrow {uni-arrow ...} -> bool)
-    (match ta
-      [('uni-arrow . __)
-       (for-each (lambda (a) (type-check/arrow ta a))
-                 al)]
-      [__ (debug0 'type-check
-            ("type of function must be arrow~%")
-            ("type : ~a~%" ta))]))
-
-  (define (type-check/arrow ta a)
-    (: type-arrow arrow -> bool)
-    (match {ta a}
-      [{{'uni-arrow tnl tfrc tajj tsjj}
-        {'uni-arrow nl frc ajj sjj}}
-       (let* ([ds0 ds]
-              [bs0 bs]
-              [gs0 gs]
-              [tvrc (append tfrc (nl->vrc tnl))]
-              [vrc (append frc (nl->vrc nl))]
-              [dl-tajj (call-with-output-to-new-ds
-                        (lambda ()
-                          (push rs (% rsp-proto
-                                      'ex  compose
-                                      'vrc tvrc
-                                      'jj  tajj))
-                          (rs/next)))]
-              [dl-ajj (call-with-output-to-new-ds
-                       (lambda ()
-                         (push rs (% rsp-proto
-                                     'ex  cut
-                                     'vrc vrc
-                                     'jj  ajj))
-                         (rs/next)))])
-         (: ><><><
-            in lack of bind-unify
-            (push rs {compose <type-antecedent>})
-            (push rs {compose <antecedent>})
-            (push gs {bind-unify <gathered>}))
-         (if3 [(push gs (% gsp-proto
-                           'ex     (unify 'unify)
-                           'dl+    dl-ajj
-                           'dl-    dl-tajj))
-               (gs/next)]
-              [(let* ([dl-tsjj (call-with-output-to-new-ds
-                                (lambda ()
-                                  (push rs (% rsp-proto
-                                              'ex  compose
-                                              'vrc tvrc
-                                              'jj  tsjj))
-                                  (rs/next)))]
-                      [dl-sjj (call-with-output-to-new-ds
-                               (lambda ()
-                                 (push rs (% rsp-proto
-                                             'ex  cut
-                                             'vrc vrc
-                                             'jj  sjj))
-                                 (rs/next)))])
-                 (if3 [(push gs (% gsp-proto
-                                   'ex     (unify 'cover)
-                                   'dl+    dl-sjj
-                                   'dl-    dl-tsjj))
-                       (gs/next)]
-                      [(set! ds ds0)
-                       (set! bs bs0)
-                       (set! gs gs0)
-                       #t]
-                      [(debug0 'type-check/arrow
-                         ("cover fail~%")
-                         ("tsjj : ~a~%" tsjj)
-                         ("dl-tsjj : ~a~%" dl-tsjj)
-                         ("sjj : ~a~%" sjj)
-                         ("dl-sjj : ~a~%" dl-sjj))]))]
-              [(debug0 'type-check/arrow
-                 ("unify fail~%")
-                 ("tajj : ~a~%" tajj)
-                 ("dl-tajj : ~a~%" dl-tajj)
-                 ("ajj : ~a~%" ajj)
-                 ("ajj : ~a~%" dl-ajj))]))])))
 
 (define (type-check ta al)
   (: uni-arrow {uni-arrow ...} -> bool)

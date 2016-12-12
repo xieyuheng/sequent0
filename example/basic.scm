@@ -21,18 +21,40 @@
     (-> [zero] [zero succ])
     (-> [:n succ] [:n factorial :n succ mul])))
 
-(: (def nat-induction
-     (lambda (-> [(-> [nat] [type]) %:p
-                  zero :p @
-                  (-> [nat %:k :k :p @]
-                      [:k succ :p @])
-                  nat %:x]
-                 [:x :p @])
-       (-> [:p :p/z :p/s zero] [:p/z])
-       (-> [:p :p/z :p/s :n succ]
-           [:n
-            :p :p/z :p/s :n nat-induction
-            :p/s @]))))
+(def nat-induction
+  (lambda (-> [(-> [nat] [type]) %:p
+               zero :p @
+               (-> [nat %:k :k ::p @] [:k succ ::p @])
+               nat %:x]
+              [:x :p @])
+    (-> [:p :p/z :p/s zero] [:p/z])
+    (-> [:p :p/z :p/s :n succ]
+        [:n
+         :p :p/z :p/s :n nat-induction
+         :p/s @])))
+
+;; (def add-ind
+;;   (lambda (-> [nat nat] [nat])
+;;     (-> [:m :n]
+;;         [(lambda (-> [nat] [type])
+;;            (-> [:x] [nat]))
+;;          :m
+;;          (lambda (-> [nat %:k :k :p @])
+;;            (-> [:k :k-rec] [:k-rec succ]))
+;;          :n
+;;          nat-induction])))
+
+;; (def nat-induction
+;;   (lambda (-> [(-> [nat] [type]) %:p
+;;                zero :p @
+;;                (-> [nat %:k :k :p @]
+;;                    [:k succ :p @])]
+;;               [(-> [nat %:x] [:x :p @])])
+;;     (-> [:p :p/z :p/s zero] [:p/z])
+;;     (-> [:p :p/z :p/s :n succ]
+;;         [:n
+;;          :p :p/z :p/s :n nat-induction
+;;          :p/s @])))
 
 (def drop
   (lambda (-> [:t] [])
@@ -150,11 +172,11 @@
     cons/has-length (-> [:l :n has-length]
                         [:l :a cons :n succ has-length])))
 
-(: (def map/has-length
-     (lambda (-> [:l :n has-length]
-                 [:l :f map :n has-length])
-       (-> [null/has-length] [null/has-length])
-       (-> [:h cons/has-length] [:h map/has-length cons/has-length]))))
+(def map/has-length
+  (lambda (-> [:l :n has-length]
+              [:l :f map :n has-length])
+    (-> [null/has-length] [null/has-length])
+    (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
 
 (def vector
   (type (-> [nat type] [type])

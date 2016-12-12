@@ -30,22 +30,76 @@
     (lambda (-> [nat] [nat])
       (-> [zero] [zero succ])
       (-> [:n succ] [:n factorial :n succ mul])))
+  #+end_src
 
-  (: (def nat-induction
-       (lambda (-> [(-> [nat] [type]) %:p
-                    zero :p @
-                    (-> [nat %:k :k :p @]
-                        [:k succ :p @])
-                    nat %:x]
-                   [:x :p @])
-         (-> [:p :p/z :p/s zero] [:p/z])
-         (-> [:p :p/z :p/s :n succ]
-             [:n
-              :p :p/z :p/s :n nat-induction
-              :p/s @]))))
+* note nat-induction in idris
+
+  #+begin_src idris :tangle no
+  data Nat : Type where
+       Z : Nat
+       S : Nat -> Nat
+
+  plus : Nat -> Nat -> Nat
+  plus Z     m = m
+  plus (S k) m = S (plus k m)
+
+  nat_ind : (P : Nat -> Type) ->             -- Property to show
+            (P Z) ->                         -- Base case
+            ((k : Nat) -> P k -> P (S k)) -> -- Inductive step
+            ((x : Nat) -> P x)               -- Show for all x
+  nat_ind P p_Z p_S Z = p_Z
+  nat_ind P p_Z p_S (S k) = p_S k (nat_ind P p_Z p_S k)
+
+  plus_ind : Nat -> Nat -> Nat
+  plus_ind n m
+     = nat_ind (λ x => Nat)
+               m                       -- Base case, plus_ind Z m
+               (λ k, k_rec => S k_rec) -- Inductive step plus_ind (S k) m
+                                       -- where k_rec = plus_ind k m
+               n
+  #+end_src
+
+* nat-induction
+
+  #+begin_src scheme
+  (def nat-induction
+    (lambda (-> [(-> [nat] [type]) %:p
+                 zero :p @
+                 (-> [nat %:k :k ::p @] [:k succ ::p @])
+                 nat %:x]
+                [:x :p @])
+      (-> [:p :p/z :p/s zero] [:p/z])
+      (-> [:p :p/z :p/s :n succ]
+          [:n
+           :p :p/z :p/s :n nat-induction
+           :p/s @])))
+
+  ;; (def add-ind
+  ;;   (lambda (-> [nat nat] [nat])
+  ;;     (-> [:m :n]
+  ;;         [(lambda (-> [nat] [type])
+  ;;            (-> [:x] [nat]))
+  ;;          :m
+  ;;          (lambda (-> [nat %:k :k :p @])
+  ;;            (-> [:k :k-rec] [:k-rec succ]))
+  ;;          :n
+  ;;          nat-induction])))
+
+  ;; (def nat-induction
+  ;;   (lambda (-> [(-> [nat] [type]) %:p
+  ;;                zero :p @
+  ;;                (-> [nat %:k :k :p @]
+  ;;                    [:k succ :p @])]
+  ;;               [(-> [nat %:x] [:x :p @])])
+  ;;     (-> [:p :p/z :p/s zero] [:p/z])
+  ;;     (-> [:p :p/z :p/s :n succ]
+  ;;         [:n
+  ;;          :p :p/z :p/s :n nat-induction
+  ;;          :p/s @])))
   #+end_src
 
 * stack
+
   #+begin_src scheme
   (def drop
     (lambda (-> [:t] [])
@@ -180,11 +234,11 @@
       cons/has-length (-> [:l :n has-length]
                           [:l :a cons :n succ has-length])))
 
-  (: (def map/has-length
-       (lambda (-> [:l :n has-length]
-                   [:l :f map :n has-length])
-         (-> [null/has-length] [null/has-length])
-         (-> [:h cons/has-length] [:h map/has-length cons/has-length]))))
+  (def map/has-length
+    (lambda (-> [:l :n has-length]
+                [:l :f map :n has-length])
+      (-> [null/has-length] [null/has-length])
+      (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
   #+end_src
 
 * vector

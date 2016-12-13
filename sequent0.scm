@@ -1018,14 +1018,21 @@
            [ex  (^ gsp 'ex)]
            [dl1 (^ gsp 'dl+)]
            [dl2 (^ gsp 'dl-)])
-      (if3 [(>= c (length dl1))]
-           [#t]
-           [(push gs (% gsp 'c (+ 1 c)))
-            (if (unify/data/data m
-                                 (list-ref dl1 c)
-                                 (list-ref dl2 c))
-              (gs/next)
-              #f)]))))
+      (if3 [(not (= (length dl1) (length dl2)))]
+           [(debug0 'unify
+              ("unify fail~%")
+              ("length of dl+ is ~a~%" (length dl1))
+              ("length of dl- is ~a~%" (length dl2))
+              ("dl+ : ~a~%" dl1)
+              ("dl- : ~a~%" dl2))]
+           [(if3 [(>= c (length dl1))]
+                 [#t]
+                 [(push gs (% gsp 'c (+ 1 c)))
+                  (if (unify/data/data m
+                                       (list-ref dl1 c)
+                                       (list-ref dl2 c))
+                    (gs/next)
+                    #f)])]))))
 
 (define (unify/data/data m d1 d2)
   (: data data -> bool)
@@ -1210,14 +1217,21 @@
            [ex  (^ gsp 'ex)]
            [dl1 (^ gsp 'dl+)]
            [dl2 (^ gsp 'dl-)])
-      (if3 [(>= c (length dl1))]
-           [#t]
-           [(push gs (% gsp 'c (+ 1 c)))
-            (if (up-unify/data/data m
-                                    (list-ref dl1 c)
-                                    (list-ref dl2 c))
-              (gs/next)
-              #f)]))))
+      (if3 [(not (= (length dl1) (length dl2)))]
+           [(debug0 'up-unify
+              ("up-unify fail~%")
+              ("length of dl+ is ~a~%" (length dl1))
+              ("length of dl- is ~a~%" (length dl2))
+              ("dl+ : ~a~%" dl1)
+              ("dl- : ~a~%" dl2))]
+           [(if3 [(>= c (length dl1))]
+                 [#t]
+                 [(push gs (% gsp 'c (+ 1 c)))
+                  (if (up-unify/data/data m
+                                          (list-ref dl1 c)
+                                          (list-ref dl2 c))
+                    (gs/next)
+                    #f)])]))))
 
 ;; note that
 ;;   up-unify vs unify

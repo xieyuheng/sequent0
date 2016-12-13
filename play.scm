@@ -9,10 +9,12 @@
 (include "sequent0.scm")
 (print-define+)
 
+
+
+
 (type-check+)
-
-(rs/steper+)
-;; (gs/steper+)
-
 ;; (cover-check+)
 ;; (recur-check+)
+
+;; (rs/steper+)
+;; (gs/steper+)

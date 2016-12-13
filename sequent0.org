@@ -3,8 +3,6 @@
 
 * todo
 
-  - [problem] the code for rs & gs are highly duped
-
   - [for the steper] [maybe]
     not every call to next should be traced by the steper
     must be able to config the steper >_<
@@ -16,8 +14,6 @@
   - review the commit problem
     not only in compose/try-body
     but more
-
-  - unify should check the length of dl+ dl-
 
   - all that form trunk should up-unify its type to data
     apply included
@@ -68,10 +64,10 @@
 
 *** dispatching
 
-    | jo      | data    | double data |
-    |---------+---------+-------------|
-    | compose | bs/deep | cover       |
-    |         | d2t     | unify       |
+    | jo      | data          | double data |
+    |---------+---------------+-------------|
+    | compose | bs/deep & d2t | unify       |
+
 
 *** syntax
 
@@ -1419,14 +1415,21 @@
                  [ex  (^ gsp 'ex)]
                  [dl1 (^ gsp 'dl+)]
                  [dl2 (^ gsp 'dl-)])
-            (if3 [(>= c (length dl1))]
-                 [#t]
-                 [(push gs (% gsp 'c (+ 1 c)))
-                  (if (unify/data/data m
-                                       (list-ref dl1 c)
-                                       (list-ref dl2 c))
-                    (gs/next)
-                    #f)]))))
+            (if3 [(not (= (length dl1) (length dl2)))]
+                 [(debug0 'unify
+                    ("unify fail~%")
+                    ("length of dl+ is ~a~%" (length dl1))
+                    ("length of dl- is ~a~%" (length dl2))
+                    ("dl+ : ~a~%" dl1)
+                    ("dl- : ~a~%" dl2))]
+                 [(if3 [(>= c (length dl1))]
+                       [#t]
+                       [(push gs (% gsp 'c (+ 1 c)))
+                        (if (unify/data/data m
+                                             (list-ref dl1 c)
+                                             (list-ref dl2 c))
+                          (gs/next)
+                          #f)])]))))
       #+end_src
 
 ***** unify/data/data
@@ -1653,14 +1656,21 @@
                  [ex  (^ gsp 'ex)]
                  [dl1 (^ gsp 'dl+)]
                  [dl2 (^ gsp 'dl-)])
-            (if3 [(>= c (length dl1))]
-                 [#t]
-                 [(push gs (% gsp 'c (+ 1 c)))
-                  (if (up-unify/data/data m
-                                          (list-ref dl1 c)
-                                          (list-ref dl2 c))
-                    (gs/next)
-                    #f)]))))
+            (if3 [(not (= (length dl1) (length dl2)))]
+                 [(debug0 'up-unify
+                    ("up-unify fail~%")
+                    ("length of dl+ is ~a~%" (length dl1))
+                    ("length of dl- is ~a~%" (length dl2))
+                    ("dl+ : ~a~%" dl1)
+                    ("dl- : ~a~%" dl2))]
+                 [(if3 [(>= c (length dl1))]
+                       [#t]
+                       [(push gs (% gsp 'c (+ 1 c)))
+                        (if (up-unify/data/data m
+                                                (list-ref dl1 c)
+                                                (list-ref dl2 c))
+                          (gs/next)
+                          #f)])]))))
       #+end_src
 
 ***** up-unify/data/data

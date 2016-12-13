@@ -3,9 +3,6 @@
 
 * todo
 
-  - no need to use ender at all
-    just use the control flow of scheme
-
   - [problem] the code for rs & gs are highly duped
 
   - [for the steper] [maybe]
@@ -774,12 +771,6 @@
     (define rs '())
     #+end_src
 
-*** rs/exit
-
-    #+begin_src scheme
-    (define (rs/exit) (void))
-    #+end_src
-
 *** rs/next
 
     #+begin_src scheme
@@ -851,7 +842,6 @@
        (pair-list
         'c      0
         'ex     '(explainer)
-        'end    rs/exit
         'vrc    '(var record)
         'jj     '(jojo))
        (pair-list
@@ -932,10 +922,9 @@
         (let* ([rsp (pop rs)]
                [c   (^ rsp 'c)]
                [ex  (^ rsp 'ex)]
-               [end (^ rsp 'end)]
                [jj  (^ rsp 'jj)])
           (if3 [(>= c (length jj))]
-               [(end)]
+               []
                [(push rs (% rsp 'c (+ 1 c)))
                 (compose/jo (list-ref jj c))
                 (rs/next)])))
@@ -1240,12 +1229,6 @@
     (define gs '())
     #+end_src
 
-*** gs/exit
-
-    #+begin_src scheme
-    (define (gs/exit) (void))
-    #+end_src
-
 *** gs/next
 
     #+begin_src scheme
@@ -1310,7 +1293,6 @@
        (pair-list
         'c      0
         'ex     '(explainer)
-        'end    gs/exit
         'dl+    '(data-list)
         'dl-    '(data-list))
        (pair-list
@@ -1435,12 +1417,10 @@
           (let* ([gsp (pop gs)]
                  [c   (^ gsp 'c)]
                  [ex  (^ gsp 'ex)]
-                 [end (^ gsp 'end)]
                  [dl1 (^ gsp 'dl+)]
                  [dl2 (^ gsp 'dl-)])
             (if3 [(>= c (length dl1))]
-                 [(end)
-                  #t]
+                 [#t]
                  [(push gs (% gsp 'c (+ 1 c)))
                   (if (unify/data/data m
                                        (list-ref dl1 c)
@@ -1671,12 +1651,10 @@
           (let* ([gsp (pop gs)]
                  [c   (^ gsp 'c)]
                  [ex  (^ gsp 'ex)]
-                 [end (^ gsp 'end)]
                  [dl1 (^ gsp 'dl+)]
                  [dl2 (^ gsp 'dl-)])
             (if3 [(>= c (length dl1))]
-                 [(end)
-                  #t]
+                 [#t]
                  [(push gs (% gsp 'c (+ 1 c)))
                   (if (up-unify/data/data m
                                           (list-ref dl1 c)

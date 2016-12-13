@@ -534,8 +534,6 @@
 ;; return-stack
 (define rs '())
 
-(define (rs/exit) (void))
-
 (define (rs/next)
   (if rs/steper-flag
     (rs/steper)
@@ -588,7 +586,6 @@
    (pair-list
     'c      0
     'ex     '(explainer)
-    'end    rs/exit
     'vrc    '(var record)
     'jj     '(jojo))
    (pair-list
@@ -643,10 +640,9 @@
   (let* ([rsp (pop rs)]
          [c   (^ rsp 'c)]
          [ex  (^ rsp 'ex)]
-         [end (^ rsp 'end)]
          [jj  (^ rsp 'jj)])
     (if3 [(>= c (length jj))]
-         [(end)]
+         []
          [(push rs (% rsp 'c (+ 1 c)))
           (compose/jo (list-ref jj c))
           (rs/next)])))
@@ -890,8 +886,6 @@
 ;;   binding-stack is to record solution of equations in goal-stack
 (define gs '())
 
-(define (gs/exit) (void))
-
 (define (gs/next)
   (: -> bool)
   (if gs/steper-flag
@@ -941,7 +935,6 @@
    (pair-list
     'c      0
     'ex     '(explainer)
-    'end    gs/exit
     'dl+    '(data-list)
     'dl-    '(data-list))
    (pair-list
@@ -1023,12 +1016,10 @@
     (let* ([gsp (pop gs)]
            [c   (^ gsp 'c)]
            [ex  (^ gsp 'ex)]
-           [end (^ gsp 'end)]
            [dl1 (^ gsp 'dl+)]
            [dl2 (^ gsp 'dl-)])
       (if3 [(>= c (length dl1))]
-           [(end)
-            #t]
+           [#t]
            [(push gs (% gsp 'c (+ 1 c)))
             (if (unify/data/data m
                                  (list-ref dl1 c)
@@ -1217,12 +1208,10 @@
     (let* ([gsp (pop gs)]
            [c   (^ gsp 'c)]
            [ex  (^ gsp 'ex)]
-           [end (^ gsp 'end)]
            [dl1 (^ gsp 'dl+)]
            [dl2 (^ gsp 'dl-)])
       (if3 [(>= c (length dl1))]
-           [(end)
-            #t]
+           [#t]
            [(push gs (% gsp 'c (+ 1 c)))
             (if (up-unify/data/data m
                                     (list-ref dl1 c)

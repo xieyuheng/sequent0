@@ -96,18 +96,47 @@
 (: gs {gsp ...})
 
 (define (print-jo j)
-  ;; (match j
-  ;;   []
-  ;;   [])
-  (display j)
-  (display "\n"))
+  (match j
+    [{'var n}  (cat ("~a " n))]
+    [{'fvar n} (cat (":~a " n))]
+    [{'bind n} (cat ("%~a " n))]
+    [{'call n} (cat ("~a " n))]
+    [{'arrow nl fnl ajj sjj}
+     (cat ("(-> "))
+     (cat ("[ ")) (map print-jo ajj) (cat ("] "))
+     (cat ("[ ")) (map print-jo sjj) (cat ("]) "))]
+    [{'uni-arrow nl frc ajj sjj}
+     (cat ("(-> "))
+     (cat ("[ ")) (map print-jo ajj) (cat ("] "))
+     (cat ("[ ")) (map print-jo sjj) (cat ("]) "))]
+    [{'lambda a al}
+     (cat ("(lambda "))
+     (print-jo a)
+     (map print-jo al)
+     (cat (") "))]
+    [{'uni-lambda a al}
+     (cat ("(lambda "))
+     (print-jo a)
+     (map print-jo al)
+     (cat (") "))]
+    [{'apply}
+     (cat ("@ "))]))
 
 (define (print-data d)
   (match d
-    [('uni-var . __)
-     (cat ("~a " d))]
-    [('uni-bind . __)
-     (cat ("~a " d))]
+    [{'uni-var id level}
+     (let* ([p (vector-ref id 0)]
+            [n (car p)]
+            [c (cdr p)]
+            [ls (vector-ref id 1)])
+       (cat ("(~a #~a ^~a" n c level))
+       (print-ls ls)
+       (cat (") ")))]
+    [{'uni-bind uv d}
+     (cat ("(:%: "))
+     (print-data uv)
+     (print-data d)
+     (cat (") "))]
     [{'cons n dl}
      (if3 [(null? dl)]
           [(cat ("~a " n))]
@@ -115,41 +144,83 @@
            (map print-data dl)
            (cat ("] "))])]
     [('uni-arrow . __)
-     (cat ("~a " d))]
+     (print-jo d)]
     [('uni-lambda . __)
-     (cat ("~a " d))]
-    [('trunk . __)
-     (cat ("~a " d))]))
+     (print-jo d)]
+    [{'trunk adl sdl k i}
+     (cat ("(:trunk: #~a " i))
+     (map print-data adl)
+     (map print-data sdl)
+     (cat ("~a) " k))]))
+
+;; note that
+;;   bsp can be '(commit-point)
+(: bs {(id . ls) ...})
+(: id (vector (name . counter) ls))
+(: ls {(level . data) ...})
 
 (define (print-bsp bsp)
-  (display bsp)
-  (display "\n"))
+  (print-id (car bsp))
+  (cat ("~%"))
+  (cat ("  ")) (print-ls (cdr bsp))
+  (cat ("~%")))
+
+(define (print-id id)
+  (let* ([p (vector-ref id 0)]
+         [n (car p)]
+         [c (cdr p)]
+         [ls (vector-ref id 1)])
+    (cat ("~a #~a " n c)) (print-ls ls)))
+
+(define (print-lsp lsp)
+  (let ([level (car lsp)]
+        [d (cdr lsp)])
+    (cat (":~a: " level))
+    (print-data d)))
+
+(define (print-ls ls)
+  (map print-lsp ls))
 
 (define (print-nsp nsp)
-  (display nsp)
-  (display "\n"))
+  (let ([n0 (car nsp)]
+        [meaning (cdr nsp)])
+    (cat ("~a~%" n0))
+    (match meaning
+      [{'meaning-type a n nl}
+       (cat ("  :type: ")) (print-jo a) (cat ("~%"))
+       (cat ("  :constructor: ~a~%" nl))]
+      [{'meaning-data a n n0}
+       (cat ("  :type: ")) (print-jo a) (cat ("~%"))
+       (cat ("  :belong-to: ~a~%" n0)) ]
+      [{'meaning-lambda a al}
+       (cat ("  :type: ")) (print-jo a) (cat ("~%"))
+       (cat ("  :lambda: ")) (map print-jo al) (cat ("~%"))])
+    (cat ("~%"))))
 
-(define (print-ds) (map print-data ds) (display "\n"))
-(define (print-bs) (map print-bsp  bs) (display "\n"))
-(define (print-ns) (map print-nsp  ns) (display "\n"))
+(define (print-ds)
+  (cat ("~%<ds>~%"))
+  (map print-data ds)
+  (cat ("~%</ds>~%~%")))
+
+(define (print-bs)
+  (cat ("~%<bs>~%"))
+  (map print-bsp bs)
+  (cat ("</bs>~%~%")))
+
+(define (print-ns)
+  (cat ("~%<ns>~%"))
+  (map print-nsp ns)
+  (cat ("</ns>~%~%")))
 
 (define (print-rs)
-  (cat ("~%")
-       ("<rs>~%"))
-  (map (lambda (o)
-         (@ o 'print))
-    rs)
-  (cat ("</rs>~%")
-       ("~%")))
+  (cat ("~%<rs>~%"))
+  (map (lambda (o) (@ o 'print)) rs)
+  (cat ("</rs>~%~%")))
 
 (define (print-gs)
-  (cat ("~%")
-       ("<gs>~%"))
-  (map (lambda (o)
-         (@ o 'print))
-    gs)
-  (cat ("</gs>~%")
-       ("~%")))
+  (cat ("~%<gs>~%"))
+  (map (lambda (o) (@ o 'print)) gs)
+  (cat ("</gs>~%~%")))
 
 (define (print-env)
   (print-ds)
@@ -466,6 +537,13 @@
 (define (rs/next)
   ((^ (tos rs) 'ex)))
 
+(define (print-vrcp vrcp)
+  (let* ([n (car vrcp)]
+         [v (cdr vrcp)])
+    (cat ("      ~a " n))
+    (print-data v)
+    (cat ("~%"))))
+
 (define rsp-proto
   (new-object
    (pair-list
@@ -481,9 +559,12 @@
            ("    :counter: ~a~%"       (^ o 'c))
            ("    :explainer: ~a~%"     (^ o 'ex))
            ("    :ender: ~a~%"         (^ o 'end))
-           ("    :var-record:~%~a~%"   (^ o 'vrc))
-           ("    :jojo:~%~a~%"         (^ o 'jj))
-           ("  </rsp>~%"))))))
+           ("    :var-record:~%"))
+      (map print-vrcp (^ o 'vrc))
+      (cat ("    :jojo: "))
+      (map print-jo (^ o 'jj))
+      (cat ("~%"))
+      (cat ("  </rsp>~%"))))))
 
 (define id/counter 0)
 
@@ -585,7 +666,7 @@
                     (rs/next)))])]
          [dl (pop-list ds (length tdl))])
     (if3 [(push gs (% gsp-proto
-                      'ex (up-unify 'unify)
+                      'ex *up-unify*
                       'end gs/exit
                       'dl+ (reverse dl)
                       'dl- (reverse tdl)))
@@ -631,7 +712,7 @@
                     (rs/next)))]
             [dl (tos-list ds (length tdl))])
        (if3 [(push gs (% gsp-proto
-                         'ex (up-unify 'unify)
+                         'ex *up-unify*
                          'end gs/exit
                          'dl+ (reverse dl)
                          'dl- (reverse tdl)))
@@ -674,12 +755,14 @@
             [dl2 (pop-list ds (length dl1))])
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
-                         'ex   (unify 'cover)
-                         'end  bs/commit
+                         'ex   *cover*
+                         'end  gs/exit
                          'dl+  (reverse dl1)
                          'dl-  (reverse dl2)))
              (gs/next)]
-            [{sjj vrc}]
+            ;; commit or undo
+            [(bs/commit)
+             {sjj vrc}]
             [(set! ds ds0)
              (set! bs bs0)
              (set! gs gs0)
@@ -785,7 +868,7 @@
 
 (define (gs/next)
   (: -> bool)
-  ((^ (tos gs) 'ex)))
+  ((cdr (^ (tos gs) 'ex))))
 
 (define gsp-proto
   (new-object
@@ -800,11 +883,17 @@
     (lambda (o)
       (cat ("  <gsp>~%")
            ("    :counter: ~a~%"        (^ o 'c))
-           ("    :explainer: ~a~%"      (^ o 'ex))
-           ("    :ender: ~a~%"          (^ o 'end))
-           ("    :data-list+: ~%~a~%"   (^ o 'dl+))
-           ("    :data-list-: ~%~a~%"   (^ o 'dl-))
-           ("  </gsp>~%"))))))
+           ("    :explainer: ~a~%"      (car (^ o 'ex)))
+           ("    :ender: ~a~%"          (^ o 'end)))
+      (cat ("    :double-data-list:~%"))
+      (map (lambda (d+ d-)
+             (cat ("      :+: "))
+             (print-data d+)
+             (cat (":-: "))
+             (print-data d-)
+             (cat ("~%")))
+        (^ o 'dl+) (^ o 'dl-))
+      (cat ("  </gsp>~%"))))))
 
 (: (let ([p1 (cons 1 1)]
          [p2 (cons 1 1)])
@@ -859,7 +948,7 @@
       [{{'cons n1 dl1} {'cons n2 dl2}}
        (cond [(eq? n1 n2)
               (push gs (% gsp-proto
-                          'ex (unify 'unify)
+                          'ex *unify*
                           'end gs/exit
                           'dl+ (reverse dl1)
                           'dl- (reverse dl2)))
@@ -941,7 +1030,7 @@
                  (if3 [(equal? {adl1 sdl1 i1 b1}
                                {adl2 sdl2 i2 b2})]
                       [(push gs (% gsp-proto
-                                   'ex (unify 'unify)
+                                   'ex *unify*
                                    'end gs/exit
                                    'dl+ (reverse dl1)
                                    'dl- (reverse dl2)))
@@ -951,7 +1040,7 @@
                  (if3 [(equal? {adl1 sdl1 i1}
                                {adl2 sdl2 i2})]
                       [(push gs (% gsp-proto
-                                   'ex (unify 'unify)
+                                   'ex *unify*
                                    'end gs/exit
                                    'dl+ (reverse (cons kv1 dl1))
                                    'dl- (reverse (cons kv2 dl2))))
@@ -982,7 +1071,7 @@
                                     'jj   ajj2))
                         (rs/next)))])
        (if3 [(push gs (% gsp-proto
-                         'ex (unify 'unify)
+                         'ex *unify*
                          'end gs/exit
                          'dl+ (reverse dl-ajj1)
                          'dl- (reverse dl-ajj2)))
@@ -1004,7 +1093,7 @@
                                             'jj   sjj2))
                                 (rs/next)))])
                (push gs (% gsp-proto
-                           'ex (unify m)
+                           'ex (cons `(unify ,m) (unify m))
                            'end gs/exit
                            'dl+ (reverse dl-sjj1)
                            'dl- (reverse dl-sjj2)))
@@ -1108,6 +1197,11 @@
             (unify/data/data m d1 uv))]
 
       [{__ __} (unify/data/data m (d2t d1) d2)])))
+
+(define *unify* (cons '(unify 'unify) (unify 'unify)))
+(define *cover* (cons '(unify 'cover) (unify 'cover)))
+(define *up-unify* (cons '(up-unify 'unify) (up-unify 'unify)))
+(define *up-cover* (cons '(up-unify 'cover) (up-unify 'cover)))
 
 ;; although we can handle multi-return-value
 ;;   but one trunk only return one value
@@ -1306,7 +1400,7 @@
                                    'jj  ajj))
                        (rs/next)))])
        (if3 [(push gs (% gsp-proto
-                         'ex     (up-unify 'unify)
+                         'ex     *up-unify*
                          'dl+    (reverse dl-ajj)
                          'dl-    (reverse dl-tajj)))
              (gs/next)]
@@ -1325,7 +1419,7 @@
                                            'jj  sjj))
                                (rs/next)))])
                (if3 [(push gs (% gsp-proto
-                                 'ex     (up-unify 'cover)
+                                 'ex     *up-cover*
                                  'dl+    (reverse dl-sjj)
                                  'dl-    (reverse dl-tsjj)))
                      (gs/next)]

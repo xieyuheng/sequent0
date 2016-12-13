@@ -542,23 +542,35 @@
     (rs/next/call-ex)))
 
 (define rs/steper-flag #f)
+(define rs/steper-counter 0)
 (define (rs/steper+) (set! rs/steper-flag #t))
 (define (rs/steper-) (set! rs/steper-flag #f))
 
 (define (rs/steper)
   (cat ("rs/steper> "))
-  (let ([user-input (read)])
-    (case user-input
-      ['n
-       (print-rs)
-       (rs/next/call-ex)]
-      ['exit
-       (cat ("rs/steper: exit~%"))
-       (rs/steper-)
-       (rs/next/call-ex)]
-      [else
-       (cat ("rs/steper: unknown command :: ~a~%" user-input))
-       (rs/steper)])))
+  (if (> rs/steper-counter 0)
+    (let ()
+      (set! rs/steper-counter (- rs/steper-counter 1))
+      (cat (":~a:~%" rs/steper-counter))
+      (print-rs)
+      (rs/next/call-ex))
+    (let ([user-input (read)])
+      (cond [(number? user-input)
+             (set! rs/steper-counter user-input)
+             (cat (":~a:~%" rs/steper-counter))
+             (print-rs)
+             (rs/next/call-ex)]
+            [(eq? user-input 'n)
+             (cat (":~a:~%" rs/steper-counter))
+             (print-rs)
+             (rs/next/call-ex)]
+            [(eq? user-input 'exit)
+             (cat ("rs/steper: exit~%"))
+             (rs/steper-)
+             (rs/next/call-ex)]
+            [else
+             (cat ("rs/steper: unknown command :: ~a~%" user-input))
+             (rs/steper)]))))
 
 (define (rs/next/call-ex)
   (let ([ex (^ (tos rs) 'ex)])
@@ -583,9 +595,7 @@
     'print
     (lambda (o)
       (cat ("  <rsp>~%")
-           ("    :counter: ~a~%"       (^ o 'c))
-           ("    :explainer: ~a~%"     (^ o 'ex))
-           ("    :ender: ~a~%"         (^ o 'end))
+           ("    :counter: ~a~%" (^ o 'c))
            ("    :var-record:~%"))
       (map print-vrcp (^ o 'vrc))
       (cat ("    :jojo: "))
@@ -687,14 +697,12 @@
                   (lambda ()
                     (push rs (% rsp-proto
                                 'ex   compose
-                                'end  rs/exit
                                 'vrc  (append frc (nl->vrc nl))
                                 'jj   ajj))
                     (rs/next)))])]
          [dl (pop-list ds (length tdl))])
     (if3 [(push gs (% gsp-proto
                       'ex *up-unify*
-                      'end gs/exit
                       'dl+ (reverse dl)
                       'dl- (reverse tdl)))
           (gs/next)]
@@ -733,14 +741,12 @@
                   (lambda ()
                     (push rs (% rsp-proto
                                 'ex   compose
-                                'end  rs/exit
                                 'vrc  tvrc
                                 'jj   ajj))
                     (rs/next)))]
             [dl (tos-list ds (length tdl))])
        (if3 [(push gs (% gsp-proto
                          'ex *up-unify*
-                         'end gs/exit
                          'dl+ (reverse dl)
                          'dl- (reverse tdl)))
              (gs/next)]
@@ -748,7 +754,6 @@
                [{sjj vrc}
                 (push rs (% rsp-proto
                             'ex   compose
-                            'end  rs/exit
                             'vrc  vrc
                             'jj   sjj))
                 (rs/next)]
@@ -775,7 +780,6 @@
                   (lambda ()
                     (push rs (% rsp-proto
                                 'ex   compose
-                                'end  rs/exit
                                 'vrc  vrc
                                 'jj   ajj))
                     (rs/next)))]
@@ -783,7 +787,6 @@
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
                          'ex   *cover*
-                         'end  gs/exit
                          'dl+  (reverse dl1)
                          'dl-  (reverse dl2)))
              (gs/next)]
@@ -805,7 +808,6 @@
                   (lambda ()
                     (push rs (% rsp-proto
                                 'ex   compose
-                                'end  rs/exit
                                 'vrc  vrc
                                 'jj   ajj))
                     (rs/next)))]
@@ -813,7 +815,6 @@
                   (lambda ()
                     (push rs (% rsp-proto
                                 'ex   compose
-                                'end  rs/exit
                                 'vrc  vrc
                                 'jj   sjj))
                     (rs/next)))]
@@ -833,7 +834,6 @@
               (lambda ()
                 (push rs (% rsp-proto
                             'ex   compose
-                            'end  rs/exit
                             'vrc  (append frc (nl->vrc nl))
                             'jj  ajj))
                 (rs/next))))]))
@@ -845,7 +845,6 @@
               (lambda ()
                 (push rs (% rsp-proto
                             'ex   compose
-                            'end  rs/exit
                             'vrc  (append frc (nl->vrc nl))
                             'jj  sjj))
                 (rs/next))))]))
@@ -900,24 +899,36 @@
     (gs/next/call-ex)))
 
 (define gs/steper-flag #f)
+(define gs/steper-counter 0)
 (define (gs/steper+) (set! gs/steper-flag #t))
 (define (gs/steper-) (set! gs/steper-flag #f))
 
 (define (gs/steper)
   (: -> bool)
   (cat ("gs/steper> "))
-  (let ([user-input (read)])
-    (case user-input
-      ['n
-       (print-gs)
-       (gs/next/call-ex)]
-      ['exit
-       (cat ("gs/steper: exit~%"))
-       (gs/steper-)
-       (gs/next/call-ex)]
-      [else
-       (cat ("gs/steper: unknown command :: ~a~%" user-input))
-       (gs/steper)])))
+  (if (> gs/steper-counter 0)
+    (let ()
+      (set! gs/steper-counter (- gs/steper-counter 1))
+      (cat (":~a:~%" gs/steper-counter))
+      (print-gs)
+      (gs/next/call-ex))
+    (let ([user-input (read)])
+      (cond [(number? user-input)
+             (set! gs/steper-counter user-input)
+             (cat (":~a:~%" gs/steper-counter))
+             (print-gs)
+             (gs/next/call-ex)]
+            [(eq? user-input 'n)
+             (cat (":~a:~%" gs/steper-counter))
+             (print-gs)
+             (gs/next/call-ex)]
+            [(eq? user-input 'exit)
+             (cat ("gs/steper: exit~%"))
+             (gs/steper-)
+             (gs/next/call-ex)]
+            [else
+             (cat ("gs/steper: unknown command :: ~a~%" user-input))
+             (gs/steper)]))))
 
 (define (gs/next/call-ex)
   (: -> bool)
@@ -937,9 +948,8 @@
     'print
     (lambda (o)
       (cat ("  <gsp>~%")
-           ("    :counter: ~a~%"        (^ o 'c))
-           ("    :explainer: ~a~%"      (car (^ o 'ex)))
-           ("    :ender: ~a~%"          (^ o 'end)))
+           ("    :counter: ~a~%"   (^ o 'c))
+           ("    :explainer: ~a~%" (car (^ o 'ex))))
       (cat ("    :double-data-list:~%"))
       (map (lambda (d+ d-)
              (cat ("      :+: "))
@@ -949,6 +959,56 @@
              (cat ("~%")))
         (^ o 'dl+) (^ o 'dl-))
       (cat ("  </gsp>~%"))))))
+
+(define (d2t d)
+  (define (a->sdl a)
+    (match a
+      [{'uni-arrow nl frc ajj sjj}
+       (let* ([vrc (append frc (nl->vrc nl))]
+              [adl (call-with-output-to-new-ds
+                    (lambda ()
+                      (push rs (% rsp-proto
+                                  'ex   compose
+                                  'vrc  vrc
+                                  'jj   sjj))
+                      (rs/next)))]
+              [sdl (call-with-output-to-new-ds
+                    (lambda ()
+                      (push rs (% rsp-proto
+                                  'ex   compose
+                                  'vrc  vrc
+                                  'jj   sjj))
+                      (rs/next)))])
+         sdl)]))
+  (match d
+    [{'uni-var id level} (bs/walk {'uni-var id (+ 1 level)})]
+    [{'uni-bind uv d1} d1]
+    [{'cons n dl}
+     (let ([found (assq n ns)])
+       (if (not found)
+         (debug0 'd2t ("unknow name : ~a~%" n))
+         (match (cdr found)
+           ;; ><><><
+           ;; need bind-unify for adl of cons and dl
+           [{'meaning-type a n nl}
+            (car (a->sdl a))]
+           [{'meaning-data a n n0}
+            (car (a->sdl a))]
+           [{'meaning-lambda a al}
+            (debug0 'd2t
+              ("found a lambda from cons name : ~a~%" n)
+              ("lambda type : ~a~%" a)
+              ("lambda body : ~a~%" al))])))]
+    [('uni-arrow . __)
+     (debug0 'd2t
+       ("can not infer type from uni-arrow : ~a~%" d))]
+    [{'uni-lambda a al} a]
+    [{'trunk adl sdl k i}
+     ;; info about special branch is not needed
+     ;;   thus no need to try-trunk
+     ;; info about the dl is needed
+     ;;   it is already handled when creating the trunk
+     (list-ref sdl i)]))
 
 (: (let ([p1 (cons 1 1)]
          [p2 (cons 1 1)])
@@ -1004,7 +1064,6 @@
        (cond [(eq? n1 n2)
               (push gs (% gsp-proto
                           'ex *unify*
-                          'end gs/exit
                           'dl+ (reverse dl1)
                           'dl- (reverse dl2)))
               (gs/next)]
@@ -1086,7 +1145,6 @@
                                {adl2 sdl2 i2 b2})]
                       [(push gs (% gsp-proto
                                    'ex *unify*
-                                   'end gs/exit
                                    'dl+ (reverse dl1)
                                    'dl- (reverse dl2)))
                        (gs/next)]
@@ -1096,7 +1154,6 @@
                                {adl2 sdl2 i2})]
                       [(push gs (% gsp-proto
                                    'ex *unify*
-                                   'end gs/exit
                                    'dl+ (reverse (cons kv1 dl1))
                                    'dl- (reverse (cons kv2 dl2))))
                        (gs/next)]
@@ -1113,7 +1170,6 @@
                       (lambda ()
                         (push rs (% rsp-proto
                                     'ex   compose
-                                    'end  rs/exit
                                     'vrc  vrc1
                                     'jj   ajj1))
                         (rs/next)))]
@@ -1121,13 +1177,11 @@
                       (lambda ()
                         (push rs (% rsp-proto
                                     'ex   compose
-                                    'end  rs/exit
                                     'vrc  vrc2
                                     'jj   ajj2))
                         (rs/next)))])
        (if3 [(push gs (% gsp-proto
                          'ex *unify*
-                         'end gs/exit
                          'dl+ (reverse dl-ajj1)
                          'dl- (reverse dl-ajj2)))
              (gs/next)]
@@ -1135,7 +1189,6 @@
                               (lambda ()
                                 (push rs (% rsp-proto
                                             'ex   compose
-                                            'end  rs/exit
                                             'vrc  vrc1
                                             'jj   sjj1))
                                 (rs/next)))]
@@ -1143,13 +1196,11 @@
                               (lambda ()
                                 (push rs (% rsp-proto
                                             'ex   compose
-                                            'end  rs/exit
                                             'vrc  vrc2
                                             'jj   sjj2))
                                 (rs/next)))])
                (push gs (% gsp-proto
                            'ex (cons `(unify ,m) (unify m))
-                           'end gs/exit
                            'dl+ (reverse dl-sjj1)
                            'dl- (reverse dl-sjj2)))
                (gs/next))]
@@ -1159,58 +1210,6 @@
                ("ajj2 : ~a~%" ajj2)
                ("dl-ajj1 : ~a~%" dl-ajj1)
                ("dl-ajj2 : ~a~%" dl-ajj2))]))]))
-
-(define (d2t d)
-  (define (a->sdl a)
-    (match a
-      [{'uni-arrow nl frc ajj sjj}
-       (let* ([vrc (append frc (nl->vrc nl))]
-              [adl (call-with-output-to-new-ds
-                    (lambda ()
-                      (push rs (% rsp-proto
-                                  'ex   compose
-                                  'end  rs/exit
-                                  'vrc  vrc
-                                  'jj   sjj))
-                      (rs/next)))]
-              [sdl (call-with-output-to-new-ds
-                    (lambda ()
-                      (push rs (% rsp-proto
-                                  'ex   compose
-                                  'end  rs/exit
-                                  'vrc  vrc
-                                  'jj   sjj))
-                      (rs/next)))])
-         sdl)]))
-  (match d
-    [{'uni-var id level} (bs/walk {'uni-var id (+ 1 level)})]
-    [{'uni-bind uv d1} d1]
-    [{'cons n dl}
-     (let ([found (assq n ns)])
-       (if (not found)
-         (debug0 'd2t ("unknow name : ~a~%" n))
-         (match (cdr found)
-           ;; ><><><
-           ;; need bind-unify for adl of cons and dl
-           [{'meaning-type a n nl}
-            (car (a->sdl a))]
-           [{'meaning-data a n n0}
-            (car (a->sdl a))]
-           [{'meaning-lambda a al}
-            (debug0 'd2t
-              ("found a lambda from cons name : ~a~%" n)
-              ("lambda type : ~a~%" a)
-              ("lambda body : ~a~%" al))])))]
-    [('uni-arrow . __)
-     (debug0 'd2t
-       ("can not infer type from uni-arrow : ~a~%" d))]
-    [{'uni-lambda a al} a]
-    [{'trunk adl sdl k i}
-     ;; info about special branch is not needed
-     ;;   thus no need to try-trunk
-     ;; info about the dl is needed
-     ;;   it is already handled when creating the trunk
-     (list-ref sdl i)]))
 
 (define (up-unify m)
   (: method -> (-> bool))
@@ -1292,7 +1291,6 @@
                                           (lambda ()
                                             (push rs (% rsp-proto
                                                         'ex   compose
-                                                        'end  rs/exit
                                                         'vrc  vrc
                                                         'jj   sjj))
                                             (rs/next))))

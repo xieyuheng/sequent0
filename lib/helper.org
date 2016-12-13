@@ -30,6 +30,16 @@
     (syntax-rules ()
       [(if3 [a ...]
             [b ...]
+            [])
+       (if (let () a ...)
+         (let () b ...))]
+      [(if3 [a ...]
+            []
+            [c ...])
+       (if (not (let () a ...))
+         (let () c ...))]
+      [(if3 [a ...]
+            [b ...]
             [c ...])
        (if (let () a ...)
          (let () b ...)

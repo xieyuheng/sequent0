@@ -12,7 +12,7 @@
 (type-check+)
 
 (rs/steper+)
-(gs/steper+)
+;; (gs/steper+)
 
 ;; (cover-check+)
 ;; (recur-check+)

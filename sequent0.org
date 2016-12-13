@@ -3,11 +3,11 @@
 
 * todo
 
-  - no redefine
-
   - review the commit problem
     not only in compose/try-body
     but more
+
+  - unify should check the length of dl+ dl-
 
   - all that form trunk should up-unify its type to data
     apply included
@@ -17,6 +17,8 @@
   - need much more tests to show that type-check is 'safe'
     program that should not be checked
     must not be checked
+
+  - should not allow redefine
 
   - recur-check
 
@@ -306,9 +308,11 @@
 
     #+begin_src scheme
     (define (print-ds)
-      (cat ("~%<ds>~%"))
-      (map print-data ds)
-      (cat ("~%</ds>~%~%")))
+      (if3 [(null? ds)]
+           [(cat ("~%<ds>~%</ds>~%~%"))]
+           [(cat ("~%<ds>~%"))
+            (cat ("  ")) (map print-data ds)
+            (cat ("~%</ds>~%~%"))]))
 
     (define (print-bs)
       (cat ("~%<bs>~%"))
@@ -755,19 +759,68 @@
     #+begin_src scheme
     ;; return-stack
     (define rs '())
+    #+end_src
 
+*** rs/exit
+
+    #+begin_src scheme
     (define (rs/exit) (void))
+    #+end_src
 
+*** rs/next
+
+    #+begin_src scheme
     (define (rs/next)
-      ((^ (tos rs) 'ex)))
+      (if rs/steper-flag
+        (rs/steper)
+        (rs/next/call-ex)))
+    #+end_src
 
+*** rs/steper
+
+    #+begin_src scheme
+    (define rs/steper-flag #f)
+    (define (rs/steper+) (set! rs/steper-flag #t))
+    (define (rs/steper-) (set! rs/steper-flag #f))
+
+    (define (rs/steper)
+      (cat ("rs/steper> "))
+      (let ([user-input (read)])
+        (case user-input
+          ['n
+           (print-rs)
+           (rs/next/call-ex)]
+          ['exit
+           (cat ("rs/steper: exit~%"))
+           (rs/steper-)
+           (rs/next/call-ex)]
+          [else
+           (cat ("rs/steper: unknown command :: ~a~%" user-input))
+           (rs/steper)])))
+    #+end_src
+
+*** rs/next/call-ex
+
+    #+begin_src scheme
+    (define (rs/next/call-ex)
+      (let ([ex (^ (tos rs) 'ex)])
+        (ex)))
+    #+end_src
+
+*** print-vrcp
+
+    #+begin_src scheme
     (define (print-vrcp vrcp)
       (let* ([n (car vrcp)]
              [v (cdr vrcp)])
         (cat ("      ~a " n))
         (print-data v)
         (cat ("~%"))))
+    #+end_src
 
+*** rsp-proto
+
+    #+begin_src scheme
     (define rsp-proto
       (new-object
        (pair-list
@@ -1173,13 +1226,61 @@
     ;; goal-stack
     ;;   binding-stack is to record solution of equations in goal-stack
     (define gs '())
+    #+end_src
 
+*** gs/exit
+
+    #+begin_src scheme
     (define (gs/exit) (void))
+    #+end_src
 
+*** gs/next
+
+    #+begin_src scheme
     (define (gs/next)
       (: -> bool)
-      ((cdr (^ (tos gs) 'ex))))
+      (if gs/steper-flag
+        (gs/steper)
+        (gs/next/call-ex)))
+    #+end_src
 
+*** gs/steper
+
+    #+begin_src scheme
+    (define gs/steper-flag #f)
+    (define (gs/steper+) (set! gs/steper-flag #t))
+    (define (gs/steper-) (set! gs/steper-flag #f))
+
+    (define (gs/steper)
+      (: -> bool)
+      (cat ("gs/steper> "))
+      (let ([user-input (read)])
+        (case user-input
+          ['n
+           (print-gs)
+           (gs/next/call-ex)]
+          ['exit
+           (cat ("gs/steper: exit~%"))
+           (gs/steper-)
+           (gs/next/call-ex)]
+          [else
+           (cat ("gs/steper: unknown command :: ~a~%" user-input))
+           (gs/steper)])))
+    #+end_src
+
+*** gs/next/call-ex
+
+    #+begin_src scheme
+    (define (gs/next/call-ex)
+      (: -> bool)
+      (let* ([p (^ (tos gs) 'ex)]
+             [ex (cdr p)])
+        (ex)))
+    #+end_src
+
+*** gsp-proto
+
+    #+begin_src scheme
     (define gsp-proto
       (new-object
        (pair-list
@@ -1744,6 +1845,18 @@
               ("can not find key : ~a~%" key)))))
       #+end_src
 
+***** print-def
+
+      #+begin_src scheme
+      (define (print-def n meaning)
+        (cat ("~%")
+             ("<def>~%")
+             ("  :name: ~a~%" n)
+             ("  :meaning:~%~a~%" meaning)
+             ("</def>~%")
+             ("~%")))
+      #+end_src
+
 ***** def-lambda
 
       #+begin_src scheme
@@ -1752,17 +1865,8 @@
                [al (map compile-uni-arrow (cddr body))]
                [meaning (list 'meaning-lambda a al)])
           (push ns (cons n meaning))
-          (if type-check-flag
-            (type-check a al))
-          (if print-define-flag
-            (let ()
-              (display "\n")
-              (display "<def-lambda>\n")
-              (display ":name: ") (display n) (display "\n")
-              (display ":meaning:\n")
-              (display meaning) (display "\n")
-              (display "</def-lambda>\n")
-              (display "\n")))))
+          (if type-check-flag (type-check a al))
+          (if print-define-flag (print-def n meaning))))
 
       (new-key 'lambda def-lambda)
       #+end_src
@@ -1778,17 +1882,8 @@
                [nl (map car pl)]
                [meaning (list 'meaning-type a n nl)])
           (push ns (cons n meaning ))
-          (if print-define-flag
-            (let ()
-              (display "\n")
-              (display "<def-type>\n")
-              (display ":name: ") (display n) (display "\n")
-              (display ":meaning:\n")
-              (display meaning) (display "\n")
-              (display "</def-type>\n")
-              (display "\n")))
-          (for-each (lambda (p) (def-data n p))
-                    pl)))
+          (if print-define-flag (print-def n meaning))
+          (for-each (lambda (p) (def-data n p)) pl)))
 
       (new-key 'type def-type)
 
@@ -1797,15 +1892,7 @@
                [a (compile-uni-arrow (cdr p))]
                [meaning (list 'meaning-data a n n0)])
           (push ns (cons n meaning))
-          (if print-define-flag
-            (let ()
-              (display "\n")
-              (display "<def-data>\n")
-              (display ":name: ") (display n) (display "\n")
-              (display ":meaning:\n")
-              (display meaning) (display "\n")
-              (display "</def-data>\n")
-              (display "\n")))))
+          (if print-define-flag (print-def n meaning))))
       #+end_src
 
 *** run

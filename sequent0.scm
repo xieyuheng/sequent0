@@ -198,9 +198,11 @@
     (cat ("~%"))))
 
 (define (print-ds)
-  (cat ("~%<ds>~%"))
-  (map print-data ds)
-  (cat ("~%</ds>~%~%")))
+  (if3 [(null? ds)]
+       [(cat ("~%<ds>~%</ds>~%~%"))]
+       [(cat ("~%<ds>~%"))
+        (cat ("  ")) (map print-data ds)
+        (cat ("~%</ds>~%~%"))]))
 
 (define (print-bs)
   (cat ("~%<bs>~%"))
@@ -535,7 +537,32 @@
 (define (rs/exit) (void))
 
 (define (rs/next)
-  ((^ (tos rs) 'ex)))
+  (if rs/steper-flag
+    (rs/steper)
+    (rs/next/call-ex)))
+
+(define rs/steper-flag #f)
+(define (rs/steper+) (set! rs/steper-flag #t))
+(define (rs/steper-) (set! rs/steper-flag #f))
+
+(define (rs/steper)
+  (cat ("rs/steper> "))
+  (let ([user-input (read)])
+    (case user-input
+      ['n
+       (print-rs)
+       (rs/next/call-ex)]
+      ['exit
+       (cat ("rs/steper: exit~%"))
+       (rs/steper-)
+       (rs/next/call-ex)]
+      [else
+       (cat ("rs/steper: unknown command :: ~a~%" user-input))
+       (rs/steper)])))
+
+(define (rs/next/call-ex)
+  (let ([ex (^ (tos rs) 'ex)])
+    (ex)))
 
 (define (print-vrcp vrcp)
   (let* ([n (car vrcp)]
@@ -868,7 +895,35 @@
 
 (define (gs/next)
   (: -> bool)
-  ((cdr (^ (tos gs) 'ex))))
+  (if gs/steper-flag
+    (gs/steper)
+    (gs/next/call-ex)))
+
+(define gs/steper-flag #f)
+(define (gs/steper+) (set! gs/steper-flag #t))
+(define (gs/steper-) (set! gs/steper-flag #f))
+
+(define (gs/steper)
+  (: -> bool)
+  (cat ("gs/steper> "))
+  (let ([user-input (read)])
+    (case user-input
+      ['n
+       (print-gs)
+       (gs/next/call-ex)]
+      ['exit
+       (cat ("gs/steper: exit~%"))
+       (gs/steper-)
+       (gs/next/call-ex)]
+      [else
+       (cat ("gs/steper: unknown command :: ~a~%" user-input))
+       (gs/steper)])))
+
+(define (gs/next/call-ex)
+  (: -> bool)
+  (let* ([p (^ (tos gs) 'ex)]
+         [ex (cdr p)])
+    (ex)))
 
 (define gsp-proto
   (new-object
@@ -1304,22 +1359,21 @@
       (debug0 'find-key
         ("can not find key : ~a~%" key)))))
 
+(define (print-def n meaning)
+  (cat ("~%")
+       ("<def>~%")
+       ("  :name: ~a~%" n)
+       ("  :meaning:~%~a~%" meaning)
+       ("</def>~%")
+       ("~%")))
+
 (define (def-lambda n body)
   (let* ([a (compile-uni-arrow (cadr body))]
          [al (map compile-uni-arrow (cddr body))]
          [meaning (list 'meaning-lambda a al)])
     (push ns (cons n meaning))
-    (if type-check-flag
-      (type-check a al))
-    (if print-define-flag
-      (let ()
-        (display "\n")
-        (display "<def-lambda>\n")
-        (display ":name: ") (display n) (display "\n")
-        (display ":meaning:\n")
-        (display meaning) (display "\n")
-        (display "</def-lambda>\n")
-        (display "\n")))))
+    (if type-check-flag (type-check a al))
+    (if print-define-flag (print-def n meaning))))
 
 (new-key 'lambda def-lambda)
 
@@ -1329,17 +1383,8 @@
          [nl (map car pl)]
          [meaning (list 'meaning-type a n nl)])
     (push ns (cons n meaning ))
-    (if print-define-flag
-      (let ()
-        (display "\n")
-        (display "<def-type>\n")
-        (display ":name: ") (display n) (display "\n")
-        (display ":meaning:\n")
-        (display meaning) (display "\n")
-        (display "</def-type>\n")
-        (display "\n")))
-    (for-each (lambda (p) (def-data n p))
-              pl)))
+    (if print-define-flag (print-def n meaning))
+    (for-each (lambda (p) (def-data n p)) pl)))
 
 (new-key 'type def-type)
 
@@ -1348,15 +1393,7 @@
          [a (compile-uni-arrow (cdr p))]
          [meaning (list 'meaning-data a n n0)])
     (push ns (cons n meaning))
-    (if print-define-flag
-      (let ()
-        (display "\n")
-        (display "<def-data>\n")
-        (display ":name: ") (display n) (display "\n")
-        (display ":meaning:\n")
-        (display meaning) (display "\n")
-        (display "</def-data>\n")
-        (display "\n")))))
+    (if print-define-flag (print-def n meaning))))
 
 (define-macro (run . s)
   `($run (quote ,s)))

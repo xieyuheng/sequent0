@@ -394,10 +394,13 @@
 (define bs '())
 (: bs {(id . ls) ...})
 
-(define (bs/commit)
+(define (bs/commit idl)
   (define (recur bs0)
     (cond [(equal? '(commit-point) (car bs0))
            (set! bs (cdr bs0))]
+          [(let ([id (car (car bs0))])
+             (member (car bs0) idl))
+           (recur (cdr bs0))]
           [else
            (let ([id (car (car bs0))]
                  [ls (cdr (car bs0))])
@@ -657,6 +660,13 @@
          (cons n (list 'uni-var (id/new n) 0)))
     nl))
 
+(define (vrc->idl vrc)
+  (map (lambda (x)
+         (match (cdr x)
+           [{'uni-var id level}
+            id]))
+    vrc))
+
 (define (name->uni-var n)
   (let* ([rsp (tos rs)]
          [found (assq n (^ rsp 'vrc))])
@@ -729,27 +739,28 @@
            [{'meaning-lambda a al} (compose/body a al)])))]))
 
 (define (compose/cons n a)
-  (let* ([tdl (match a
-                [{'uni-arrow nl frc ajj sjj}
-                 (call-with-output-to-new-ds
+  (match a
+    [{'uni-arrow nl frc ajj sjj}
+     (let* ([tdl (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
                                 'vrc  (append frc (nl->vrc nl))
                                 'jj   ajj))
-                    (rs/next 'compose/cons)))])]
-         [dl (pop-list ds (length tdl))])
-    (if3 [(push bs '(commit-point))
-          (push gs (% gsp-proto
-                      'ex *up-unify*
-                      'dl+ (reverse dl)
-                      'dl- (reverse tdl)))
-          (gs/next 'compose/cons)]
-         [(bs/commit)
-          (push ds (list 'cons n dl))]
-         [(debug0 'compose/cons
-            ("unify fail~%")
-            ("dl : ~a~%" dl)
-            ("tdl : ~a~%" tdl))])))
+                    (rs/next 'compose/cons)))]
+            [idl (vrc->idl frc)]
+            [dl (pop-list ds (length tdl))])
+       (if3 [(push bs '(commit-point))
+             (push gs (% gsp-proto
+                         'ex *up-unify*
+                         'dl+ (reverse dl)
+                         'dl- (reverse tdl)))
+             (gs/next 'compose/cons)]
+            [(bs/commit idl)
+             (push ds (list 'cons n dl))]
+            [(debug0 'compose/cons
+               ("unify fail~%")
+               ("dl : ~a~%" dl)
+               ("tdl : ~a~%" tdl))]))]))
 
 (: [for the first covering arrow]
    (push gs {cover commit
@@ -776,6 +787,7 @@
   (match t
     [{'uni-arrow nl frc ajj sjj}
      (let* ([tvrc (append frc (nl->vrc nl))]
+            [idl (vrc->idl frc)]
             [tdl (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
@@ -789,7 +801,7 @@
                          'dl+ (reverse dl)
                          'dl- (reverse tdl)))
              (gs/next 'compose/body)]
-            [(bs/commit)
+            [(bs/commit idl)
              (match (compose/try-body b)
                [{sjj vrc}
                 (push rs (% rsp-proto
@@ -812,6 +824,7 @@
     [{} #f]
     [({'uni-arrow nl frc ajj sjj} . r)
      (let* ([vrc (append frc (nl->vrc nl))]
+            [idl (vrc->idl frc)]
             [ds0 ds]
             [bs0 bs]
             [gs0 gs]
@@ -829,7 +842,7 @@
                          'dl-  (reverse dl2)))
              (gs/next 'compose/try-body)]
             ;; commit or undo
-            [(bs/commit)
+            [(bs/commit idl)
              {sjj vrc}]
             [(set! ds ds0)
              (set! bs bs0)

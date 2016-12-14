@@ -1,17 +1,15 @@
 #+PROPERTY: tangle sequent0.scm
 #+title: sequent0
 
-- review the commit too much problem
-
 - all that form trunk should up-unify its type to data
   apply included
+
+- fix d2t
 
 * todo
 
   - [maybe] module system
-    - should not allow redefine as it is in example now
-
-  - fix d2t
+    - for we should not allow redefine as it is in example now
 
   - need much more tests to show that type-check is 'safe'
     program that should not be checked
@@ -36,44 +34,6 @@
     - lambda & arrow found from top-level name
       are uni-lambda & uni-arrow indeed
       they just have empty frc [free-var-record]
-
-*** note about frc
-
-    - when return arrow & lambda
-      arrow->uni-arrow generate new frc
-
-    - when generate vrc by (nl->vrc nl)
-      also use fnl
-
-*** note about functions which call rs/next or gs/next
-
-    | compose           | rs |    | inner-interpreter                         |
-    | compose/cons      | rs | gs | for up-unify tdl to data in ds            |
-    | compose/body      | rs | gs | up-unify tdl & compose sjj                |
-    | compose/try-body  | rs | gs | cover ajj to data in ds                   |
-    | create-trunk-list | rs |    | to get adl sdl in trunk (as type-arrow)   |
-    | type/input-number | rs |    | compose ajj                               |
-    | try-trunk         | rs |    | compose sjj when compose/try-body success |
-    |-------------------+----+----+-------------------------------------------|
-    | d2t               | rs |    | a->sdl                                    |
-    | type-check/arrow  | rs | gs | dl-tajj dl-ajj dl-tsjj dl-sjj             |
-    |-------------------+----+----+-------------------------------------------|
-    | unify & up-unify  |    | gs | inner-interpreter                         |
-    | unify/data/data   |    | gs | nested dl in cons                         |
-    | unify/trunk/trunk |    | gs | nested dl in trunk                        |
-    | unify/arrow/arrow | rs | gs | dl-ajj1 dl-ajj2 dl-sjj1 dl-sjj2           |
-
-*** note about commit & undo
-
-    - commit not only for compose/try-body
-      but also for compose/cons & compose/body
-      for they are up-unify tdl to data in ds
-      whenever no need to undo
-      we can do commit
-
-*** note about commit too much problem
-
-    - ><><><
 
 *** terminology
 
@@ -140,6 +100,46 @@
        uni-var ~
        uni-lambda ~)
     #+end_src
+
+*** note about frc
+
+    - there are no uni-fvar only uni-var
+
+    - when return arrow & lambda
+      arrow->uni-arrow generate new frc
+
+    - when generate vrc by (nl->vrc nl)
+      also use fnl
+
+*** note about functions which call rs/next or gs/next
+
+    | compose           | rs |    | inner-interpreter                         |
+    | compose/cons      | rs | gs | for up-unify tdl to data in ds            |
+    | compose/body      | rs | gs | up-unify tdl & compose sjj                |
+    | compose/try-body  | rs | gs | cover ajj to data in ds                   |
+    | create-trunk-list | rs |    | to get adl sdl in trunk (as type-arrow)   |
+    | type/input-number | rs |    | compose ajj                               |
+    | try-trunk         | rs |    | compose sjj when compose/try-body success |
+    |-------------------+----+----+-------------------------------------------|
+    | d2t               | rs |    | a->sdl                                    |
+    | type-check/arrow  | rs | gs | dl-tajj dl-ajj dl-tsjj dl-sjj             |
+    |-------------------+----+----+-------------------------------------------|
+    | unify & up-unify  |    | gs | inner-interpreter                         |
+    | unify/data/data   |    | gs | nested dl in cons                         |
+    | unify/trunk/trunk |    | gs | nested dl in trunk                        |
+    | unify/arrow/arrow | rs | gs | dl-ajj1 dl-ajj2 dl-sjj1 dl-sjj2           |
+
+*** note about commit & undo
+
+    - commit not only for compose/try-body
+      but also for compose/cons & compose/body
+      for they are up-unify tdl to data in ds
+      whenever no need to undo
+      we can do commit
+
+*** note about commit too much problem
+
+    - bs/commit should not commit free variable
 
 * stack
 
@@ -616,10 +616,13 @@
 *** bs/commit & id/commit
 
     #+begin_src scheme
-    (define (bs/commit)
+    (define (bs/commit idl)
       (define (recur bs0)
         (cond [(equal? '(commit-point) (car bs0))
                (set! bs (cdr bs0))]
+              [(let ([id (car (car bs0))])
+                 (member (car bs0) idl))
+               (recur (cdr bs0))]
               [else
                (let ([id (car (car bs0))]
                      [ls (cdr (car bs0))])
@@ -944,6 +947,17 @@
         nl))
     #+end_src
 
+*** vrc->idl
+
+    #+begin_src scheme
+    (define (vrc->idl vrc)
+      (map (lambda (x)
+             (match (cdr x)
+               [{'uni-var id level}
+                id]))
+        vrc))
+    #+end_src
+
 *** name->uni-var
 
     #+begin_src scheme
@@ -1053,27 +1067,28 @@
 
       #+begin_src scheme
       (define (compose/cons n a)
-        (let* ([tdl (match a
-                      [{'uni-arrow nl frc ajj sjj}
-                       (call-with-output-to-new-ds
+        (match a
+          [{'uni-arrow nl frc ajj sjj}
+           (let* ([tdl (call-with-output-to-new-ds
                         (lambda ()
                           (push rs (% rsp-proto
                                       'vrc  (append frc (nl->vrc nl))
                                       'jj   ajj))
-                          (rs/next 'compose/cons)))])]
-               [dl (pop-list ds (length tdl))])
-          (if3 [(push bs '(commit-point))
-                (push gs (% gsp-proto
-                            'ex *up-unify*
-                            'dl+ (reverse dl)
-                            'dl- (reverse tdl)))
-                (gs/next 'compose/cons)]
-               [(bs/commit)
-                (push ds (list 'cons n dl))]
-               [(debug0 'compose/cons
-                  ("unify fail~%")
-                  ("dl : ~a~%" dl)
-                  ("tdl : ~a~%" tdl))])))
+                          (rs/next 'compose/cons)))]
+                  [idl (vrc->idl frc)]
+                  [dl (pop-list ds (length tdl))])
+             (if3 [(push bs '(commit-point))
+                   (push gs (% gsp-proto
+                               'ex *up-unify*
+                               'dl+ (reverse dl)
+                               'dl- (reverse tdl)))
+                   (gs/next 'compose/cons)]
+                  [(bs/commit idl)
+                   (push ds (list 'cons n dl))]
+                  [(debug0 'compose/cons
+                     ("unify fail~%")
+                     ("dl : ~a~%" dl)
+                     ("tdl : ~a~%" tdl))]))]))
       #+end_src
 
 ***** compose/body
@@ -1106,6 +1121,7 @@
           (match t
             [{'uni-arrow nl frc ajj sjj}
              (let* ([tvrc (append frc (nl->vrc nl))]
+                    [idl (vrc->idl frc)]
                     [tdl (call-with-output-to-new-ds
                           (lambda ()
                             (push rs (% rsp-proto
@@ -1119,7 +1135,7 @@
                                  'dl+ (reverse dl)
                                  'dl- (reverse tdl)))
                      (gs/next 'compose/body)]
-                    [(bs/commit)
+                    [(bs/commit idl)
                      (match (compose/try-body b)
                        [{sjj vrc}
                         (push rs (% rsp-proto
@@ -1146,6 +1162,7 @@
             [{} #f]
             [({'uni-arrow nl frc ajj sjj} . r)
              (let* ([vrc (append frc (nl->vrc nl))]
+                    [idl (vrc->idl frc)]
                     [ds0 ds]
                     [bs0 bs]
                     [gs0 gs]
@@ -1163,7 +1180,7 @@
                                  'dl-  (reverse dl2)))
                      (gs/next 'compose/try-body)]
                     ;; commit or undo
-                    [(bs/commit)
+                    [(bs/commit idl)
                      {sjj vrc}]
                     [(set! ds ds0)
                      (set! bs bs0)

@@ -1,19 +1,19 @@
 #+PROPERTY: tangle sequent0.scm
 #+title: sequent0
 
+- [about steper]
+  not every call to next should be traced by the steper
+  must be able to config the steper >_<
+  - detailed steps for debug
+    general steps for teaching or demo
+  - the caller of next should give its name for debug
+    thus the steper must be configed by name
+
+- review the commit problem
+  not only in compose/try-body
+  but more
+
 * todo
-
-  - [for the steper] [maybe]
-    not every call to next should be traced by the steper
-    must be able to config the steper >_<
-    - detailed steps for debug
-      general steps for teaching or demo
-    - the caller of next should give its name for debug
-      thus the steper must be configed by name
-
-  - review the commit problem
-    not only in compose/try-body
-    but more
 
   - all that form trunk should up-unify its type to data
     apply included
@@ -45,6 +45,24 @@
     - lambda & arrow found from top-level name
       are uni-lambda & uni-arrow indeed
       they just have empty frc [free-var-record]
+
+*** note about functions which call rs/next or gs/next
+
+    | compose           | rs    | inner-interpreter                         |
+    | compose/cons      | rs gs | for up-unify tdl to data in ds            |
+    | compose/body      | rs gs | up-unify tdl & compose sjj                |
+    | compose/try-body  | rs gs | cover ajj to data in ds                   |
+    | create-trunk-list | rs    | to get adl sdl in trunk (as type-arrow)   |
+    | type/input-number | rs    | compose ajj                               |
+    | try-trunk         | rs    | compose sjj when compose/try-body success |
+    |-------------------+-------+-------------------------------------------|
+    | d2t               | rs    | a->sdl                                    |
+    | type-check/arrow  | rs gs | dl-tajj dl-ajj dl-tsjj dl-sjj             |
+    |-------------------+-------+-------------------------------------------|
+    | unify & up-unify  | gs    | inner-interpreter                         |
+    | unify/data/data   | gs    | nested dl in cons                         |
+    | unify/trunk/trunk | gs    | nested dl in trunk                        |
+    | unify/arrow/arrow | rs gs | dl-ajj1 dl-ajj2 dl-sjj1 dl-sjj2           |
 
 *** note about frc
 
@@ -1015,10 +1033,10 @@
         (: [for the first covering arrow]
            (push gs {cover commit
                            <data-on-the-stack>
-                           (push rs {compose exit <ac>})})
+                           (push rs {compose <ac>})})
            (cond [(succ?)
                   (commit)
-                  (push rs {compose exit <sc>})
+                  (push rs {compose <sc>})
                   (exit)]
                  [(fail?)
                   (undo)
@@ -1058,7 +1076,7 @@
                                     'jj   sjj))
                         (rs/next)]
                        [#f
-                        (let ([dl (pop-list ds (type/input-number t))])
+                        (let ([dl (pop-list ds (length tdl))])
                           (push-list ds (create-trunk-list t b dl)))])]
                     [(debug0 'compose/body
                        ("up-unify fail~%")
@@ -1136,32 +1154,6 @@
                   (genlist (length sdl)))))]))
         #+end_src
 
-******* type/input-number & type/output-number
-
-        #+begin_src scheme
-        (define (type/input-number t)
-          (match t
-            [{'uni-arrow nl frc ajj sjj}
-             (length (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs (% rsp-proto
-                                    'ex   compose
-                                    'vrc  (append frc (nl->vrc nl))
-                                    'jj  ajj))
-                        (rs/next))))]))
-
-        (define (type/output-number t)
-          (match t
-            [{'uni-arrow nl frc ajj sjj}
-             (length (call-with-output-to-new-ds
-                      (lambda ()
-                        (push rs (% rsp-proto
-                                    'ex   compose
-                                    'vrc  (append frc (nl->vrc nl))
-                                    'jj  sjj))
-                        (rs/next))))]))
-        #+end_src
-
 ***** arrow->uni-arrow
 
       #+begin_src scheme
@@ -1191,6 +1183,28 @@
 ***** ><>< compose/apply
 
       #+begin_src scheme
+      (define (type/input-number t)
+        (match t
+          [{'uni-arrow nl frc ajj sjj}
+           (length (call-with-output-to-new-ds
+                    (lambda ()
+                      (push rs (% rsp-proto
+                                  'ex   compose
+                                  'vrc  (append frc (nl->vrc nl))
+                                  'jj  ajj))
+                      (rs/next))))]))
+
+      ;; (define (type/output-number t)
+      ;;   (match t
+      ;;     [{'uni-arrow nl frc ajj sjj}
+      ;;      (length (call-with-output-to-new-ds
+      ;;               (lambda ()
+      ;;                 (push rs (% rsp-proto
+      ;;                             'ex   compose
+      ;;                             'vrc  (append frc (nl->vrc nl))
+      ;;                             'jj  sjj))
+      ;;                 (rs/next))))]))
+
       ;; note that
       ;;   compose/apply can form trunk too
       ;;   the body of trunk formed by apply is uni-var
@@ -1553,7 +1567,7 @@
             #f)))
       #+end_src
 
-***** >< unify/trunk/trunk
+***** unify/trunk/trunk
 
       #+begin_src scheme
       (define (unify/trunk/trunk m t1 t2)
@@ -1734,12 +1748,10 @@
            [{'todo b dl}
             (let* ([ds0 ds]
                    [bs0 bs]
-                   [gs0 gs]
-                   [result
-                    (let ()
-                      (push-list ds dl)
-                      (compose/try-body b))])
-              (match result
+                   [gs0 gs])
+              (match (let ()
+                       (push-list ds dl)
+                       (compose/try-body b))
                 [{sjj vrc}
                  (list-ref (update-trunky! k (call-with-output-to-new-ds
                                               (lambda ()

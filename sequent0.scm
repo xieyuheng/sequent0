@@ -711,10 +711,10 @@
 (: [for the first covering arrow]
    (push gs {cover commit
                    <data-on-the-stack>
-                   (push rs {compose exit <ac>})})
+                   (push rs {compose <ac>})})
    (cond [(succ?)
           (commit)
-          (push rs {compose exit <sc>})
+          (push rs {compose <sc>})
           (exit)]
          [(fail?)
           (undo)
@@ -754,7 +754,7 @@
                             'jj   sjj))
                 (rs/next)]
                [#f
-                (let ([dl (pop-list ds (type/input-number t))])
+                (let ([dl (pop-list ds (length tdl))])
                   (push-list ds (create-trunk-list t b dl)))])]
             [(debug0 'compose/body
                ("up-unify fail~%")
@@ -823,28 +823,6 @@
         (map (lambda (i) {'trunk adl sdl k i})
           (genlist (length sdl)))))]))
 
-(define (type/input-number t)
-  (match t
-    [{'uni-arrow nl frc ajj sjj}
-     (length (call-with-output-to-new-ds
-              (lambda ()
-                (push rs (% rsp-proto
-                            'ex   compose
-                            'vrc  (append frc (nl->vrc nl))
-                            'jj  ajj))
-                (rs/next))))]))
-
-(define (type/output-number t)
-  (match t
-    [{'uni-arrow nl frc ajj sjj}
-     (length (call-with-output-to-new-ds
-              (lambda ()
-                (push rs (% rsp-proto
-                            'ex   compose
-                            'vrc  (append frc (nl->vrc nl))
-                            'jj  sjj))
-                (rs/next))))]))
-
 (define (arrow->uni-arrow a)
   (match a
     [{'arrow nl fnl ajj sjj}
@@ -858,6 +836,28 @@
     [{'lambda a al}
      (push ds {'uni-lambda (arrow->uni-arrow a)
                            (map arrow->uni-arrow al)})]))
+
+(define (type/input-number t)
+  (match t
+    [{'uni-arrow nl frc ajj sjj}
+     (length (call-with-output-to-new-ds
+              (lambda ()
+                (push rs (% rsp-proto
+                            'ex   compose
+                            'vrc  (append frc (nl->vrc nl))
+                            'jj  ajj))
+                (rs/next))))]))
+
+;; (define (type/output-number t)
+;;   (match t
+;;     [{'uni-arrow nl frc ajj sjj}
+;;      (length (call-with-output-to-new-ds
+;;               (lambda ()
+;;                 (push rs (% rsp-proto
+;;                             'ex   compose
+;;                             'vrc  (append frc (nl->vrc nl))
+;;                             'jj  sjj))
+;;                 (rs/next))))]))
 
 ;; note that
 ;;   compose/apply can form trunk too
@@ -1283,12 +1283,10 @@
        [{'todo b dl}
         (let* ([ds0 ds]
                [bs0 bs]
-               [gs0 gs]
-               [result
-                (let ()
-                  (push-list ds dl)
-                  (compose/try-body b))])
-          (match result
+               [gs0 gs])
+          (match (let ()
+                   (push-list ds dl)
+                   (compose/try-body b))
             [{sjj vrc}
              (list-ref (update-trunky! k (call-with-output-to-new-ds
                                           (lambda ()

@@ -531,48 +531,99 @@
      (and (eq? id1 id2)
           (eq? level1 level2))]))
 
-;; return-stack
-(define rs '())
+(define steper-flag #f)
+(define (steper+) (set! steper-flag #t))
+(define (steper-) (set! steper-flag #f))
 
-(define (rs/next)
-  (if rs/steper-flag
-    (rs/steper)
-    (rs/next/call-ex)))
+(define steper-counter 0)
 
-(define rs/steper-flag #f)
-(define rs/steper-counter 0)
-(define (rs/steper+) (set! rs/steper-flag #t))
-(define (rs/steper-) (set! rs/steper-flag #f))
+(define (steper)
+  (cat ("step> "))
+  (cond [(> steper-counter 0)
+         (set! steper-counter (- steper-counter 1))
+         (cat (":~a:~%" steper-counter))
+         (print-rs)]
+        [else
+         (let ([user-input (read)])
+           (cond [(number? user-input)
+                  (set! steper-counter user-input)
+                  (cat (":~a:~%" steper-counter))
+                  (print-rs)]
+                 [(eq? user-input 'n)
+                  (cat (":~a:~%" steper-counter))
+                  (print-rs)]
+                 [(eq? user-input 'exit)
+                  (cat ("steper: exit~%"))
+                  (steper-)]
+                 [else
+                  (cat ("steper: unknown command :: ~a~%" user-input))
+                  (steper)]))]))
 
-(define (rs/steper)
-  (cat ("rs/steper> "))
-  (if (> rs/steper-counter 0)
-    (let ()
-      (set! rs/steper-counter (- rs/steper-counter 1))
-      (cat (":~a:~%" rs/steper-counter))
-      (print-rs)
-      (rs/next/call-ex))
-    (let ([user-input (read)])
-      (cond [(number? user-input)
-             (set! rs/steper-counter user-input)
-             (cat (":~a:~%" rs/steper-counter))
-             (print-rs)
-             (rs/next/call-ex)]
-            [(eq? user-input 'n)
-             (cat (":~a:~%" rs/steper-counter))
-             (print-rs)
-             (rs/next/call-ex)]
-            [(eq? user-input 'exit)
-             (cat ("rs/steper: exit~%"))
-             (rs/steper-)
-             (rs/next/call-ex)]
-            [else
-             (cat ("rs/steper: unknown command :: ~a~%" user-input))
-             (rs/steper)]))))
+(define (rs/next who)
+  (when (and steper-flag
+             (member who rs/next/who-list))
+    (cat ("~a:" who))
+    (steper))
+  (rs/next/call-ex))
 
 (define (rs/next/call-ex)
   (let ([ex (^ (tos rs) 'ex)])
     (ex)))
+
+(define rs/next/who-list
+  (list
+   'compose
+   ;; 'compose/cons
+   ;; 'compose/body:ajj
+   ;; 'compose/body:sjj
+   ;; 'compose/try-body
+   ;; 'create-trunk-list:ajj
+   ;; 'create-trunk-list:sjj
+   ;; 'type/input-number
+   ;; 'type/output-number
+   ;; 'd2t:a->sdl:ajj
+   ;; 'd2t:a->sdl:sjj
+   ;; 'unify/arrow/arrow:dl-ajj1
+   ;; 'unify/arrow/arrow:dl-ajj2
+   ;; 'unify/arrow/arrow:dl-sjj1
+   ;; 'unify/arrow/arrow:dl-sjj2
+   ;; 'try-trunk
+   ;; 'type-check/arrow:tajj
+   ;; 'type-check/arrow:ajj
+   ;; 'type-check/arrow:tsjj
+   ;; 'type-check/arrow:sjj
+   ))
+
+(define (gs/next who)
+  (: -> bool)
+  (when (and steper-flag
+             (member who gs/next/who-list))
+    (cat ("~a:" who))
+    (steper))
+  (gs/next/call-ex))
+
+(define (gs/next/call-ex)
+  (: -> bool)
+  (let* ([p (^ (tos gs) 'ex)]
+         [ex (cdr p)])
+    (ex)))
+
+(define gs/next/who-list
+  (list
+   ;; 'compose/cons
+   ;; 'compose/body
+   ;; 'compose/try-body
+   'unify
+   'unify/data/data:cons
+   'unify/trunk/trunk
+   'unify/arrow/arrow:ajj1&ajj2
+   'unify/arrow/arrow:sjj1&sjj2
+   'up-unify
+   'type-check/arrow:ajj&tajj
+   'type-check/arrow:sjj&tsjj))
+
+;; return-stack
+(define rs '())
 
 (define (print-vrcp vrcp)
   (let* ([n (car vrcp)]
@@ -580,25 +631,6 @@
     (cat ("      ~a " n))
     (print-data v)
     (cat ("~%"))))
-
-(define rsp-proto
-  (new-object
-   (pair-list
-    'c      0
-    'ex     '(explainer)
-    'vrc    '(var record)
-    'jj     '(jojo))
-   (pair-list
-    'print
-    (lambda (o)
-      (cat ("  <rsp>~%")
-           ("    :counter: ~a~%" (^ o 'c))
-           ("    :var-record:~%"))
-      (map print-vrcp (^ o 'vrc))
-      (cat ("    :jojo: "))
-      (map print-jo (^ o 'jj))
-      (cat ("~%"))
-      (cat ("  </rsp>~%"))))))
 
 (define id/counter 0)
 
@@ -645,7 +677,7 @@
          []
          [(push rs (% rsp 'c (+ 1 c)))
           (compose/jo (list-ref jj c))
-          (rs/next)])))
+          (rs/next 'compose)])))
 
 (define (compose/jo j)
   (case (car j)
@@ -692,16 +724,15 @@
                  (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
-                                'ex   compose
                                 'vrc  (append frc (nl->vrc nl))
                                 'jj   ajj))
-                    (rs/next)))])]
+                    (rs/next 'compose/cons)))])]
          [dl (pop-list ds (length tdl))])
     (if3 [(push gs (% gsp-proto
                       'ex *up-unify*
                       'dl+ (reverse dl)
                       'dl- (reverse tdl)))
-          (gs/next)]
+          (gs/next 'compose/cons)]
          [(push ds (list 'cons n dl))]
          [(debug0 'compose/cons
             ("unify fail~%")
@@ -736,23 +767,21 @@
             [tdl (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
-                                'ex   compose
                                 'vrc  tvrc
                                 'jj   ajj))
-                    (rs/next)))]
+                    (rs/next 'compose/body:ajj)))]
             [dl (tos-list ds (length tdl))])
        (if3 [(push gs (% gsp-proto
                          'ex *up-unify*
                          'dl+ (reverse dl)
                          'dl- (reverse tdl)))
-             (gs/next)]
+             (gs/next 'compose/body)]
             [(match (compose/try-body b)
                [{sjj vrc}
                 (push rs (% rsp-proto
-                            'ex   compose
                             'vrc  vrc
                             'jj   sjj))
-                (rs/next)]
+                (rs/next 'compose/body:sjj)]
                [#f
                 (let ([dl (pop-list ds (length tdl))])
                   (push-list ds (create-trunk-list t b dl)))])]
@@ -775,17 +804,16 @@
             [dl1 (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
-                                'ex   compose
                                 'vrc  vrc
                                 'jj   ajj))
-                    (rs/next)))]
+                    (rs/next 'compose/try-body)))]
             [dl2 (pop-list ds (length dl1))])
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
                          'ex   *cover*
                          'dl+  (reverse dl1)
                          'dl-  (reverse dl2)))
-             (gs/next)]
+             (gs/next 'compose/try-body)]
             ;; commit or undo
             [(bs/commit)
              {sjj vrc}]
@@ -803,17 +831,15 @@
             [adl (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
-                                'ex   compose
                                 'vrc  vrc
                                 'jj   ajj))
-                    (rs/next)))]
+                    (rs/next 'create-trunk-list:ajj)))]
             [sdl (call-with-output-to-new-ds
                   (lambda ()
                     (push rs (% rsp-proto
-                                'ex   compose
                                 'vrc  vrc
                                 'jj   sjj))
-                    (rs/next)))]
+                    (rs/next 'create-trunk-list:sjj)))]
             [k (match b
                  [('uni-var . __)
                   (vector {'kvar b dl})]
@@ -843,10 +869,9 @@
      (length (call-with-output-to-new-ds
               (lambda ()
                 (push rs (% rsp-proto
-                            'ex   compose
                             'vrc  (append frc (nl->vrc nl))
                             'jj  ajj))
-                (rs/next))))]))
+                (rs/next 'type/input-number))))]))
 
 ;; (define (type/output-number t)
 ;;   (match t
@@ -854,10 +879,9 @@
 ;;      (length (call-with-output-to-new-ds
 ;;               (lambda ()
 ;;                 (push rs (% rsp-proto
-;;                             'ex   compose
 ;;                             'vrc  (append frc (nl->vrc nl))
 ;;                             'jj  sjj))
-;;                 (rs/next))))]))
+;;                 (rs/next 'type/output-number))))]))
 
 ;; note that
 ;;   compose/apply can form trunk too
@@ -882,53 +906,28 @@
             ("compose/apply can not apply data~%")
             ("data : ~a~%" d))])))
 
+(define rsp-proto
+  (new-object
+   (pair-list
+    'c      0
+    'ex     compose
+    'vrc    '(var record)
+    'jj     '(jojo))
+   (pair-list
+    'print
+    (lambda (o)
+      (cat ("  <rsp>~%")
+           ("    :counter: ~a~%" (^ o 'c))
+           ("    :var-record:~%"))
+      (map print-vrcp (^ o 'vrc))
+      (cat ("    :jojo: "))
+      (map print-jo (^ o 'jj))
+      (cat ("~%"))
+      (cat ("  </rsp>~%"))))))
+
 ;; goal-stack
 ;;   binding-stack is to record solution of equations in goal-stack
 (define gs '())
-
-(define (gs/next)
-  (: -> bool)
-  (if gs/steper-flag
-    (gs/steper)
-    (gs/next/call-ex)))
-
-(define gs/steper-flag #f)
-(define gs/steper-counter 0)
-(define (gs/steper+) (set! gs/steper-flag #t))
-(define (gs/steper-) (set! gs/steper-flag #f))
-
-(define (gs/steper)
-  (: -> bool)
-  (cat ("gs/steper> "))
-  (if (> gs/steper-counter 0)
-    (let ()
-      (set! gs/steper-counter (- gs/steper-counter 1))
-      (cat (":~a:~%" gs/steper-counter))
-      (print-gs)
-      (gs/next/call-ex))
-    (let ([user-input (read)])
-      (cond [(number? user-input)
-             (set! gs/steper-counter user-input)
-             (cat (":~a:~%" gs/steper-counter))
-             (print-gs)
-             (gs/next/call-ex)]
-            [(eq? user-input 'n)
-             (cat (":~a:~%" gs/steper-counter))
-             (print-gs)
-             (gs/next/call-ex)]
-            [(eq? user-input 'exit)
-             (cat ("gs/steper: exit~%"))
-             (gs/steper-)
-             (gs/next/call-ex)]
-            [else
-             (cat ("gs/steper: unknown command :: ~a~%" user-input))
-             (gs/steper)]))))
-
-(define (gs/next/call-ex)
-  (: -> bool)
-  (let* ([p (^ (tos gs) 'ex)]
-         [ex (cdr p)])
-    (ex)))
 
 (define gsp-proto
   (new-object
@@ -961,17 +960,15 @@
               [adl (call-with-output-to-new-ds
                     (lambda ()
                       (push rs (% rsp-proto
-                                  'ex   compose
                                   'vrc  vrc
-                                  'jj   sjj))
-                      (rs/next)))]
+                                  'jj   ajj))
+                      (rs/next 'd2t:a->sdl:ajj)))]
               [sdl (call-with-output-to-new-ds
                     (lambda ()
                       (push rs (% rsp-proto
-                                  'ex   compose
                                   'vrc  vrc
                                   'jj   sjj))
-                      (rs/next)))])
+                      (rs/next 'd2t:a->sdl:sjj)))])
          sdl)]))
   (match d
     [{'uni-var id level} (bs/walk {'uni-var id (+ 1 level)})]
@@ -1031,7 +1028,7 @@
                   (if (unify/data/data m
                                        (list-ref dl1 c)
                                        (list-ref dl2 c))
-                    (gs/next)
+                    (gs/next 'unify)
                     #f)])]))))
 
 (define (unify/data/data m d1 d2)
@@ -1064,7 +1061,7 @@
                           'ex *unify*
                           'dl+ (reverse dl1)
                           'dl- (reverse dl2)))
-              (gs/next)]
+              (gs/next 'unify/data/data:cons)]
              [else #f])]
 
       ;; trunk is the tricky part
@@ -1145,7 +1142,7 @@
                                    'ex *unify*
                                    'dl+ (reverse dl1)
                                    'dl- (reverse dl2)))
-                       (gs/next)]
+                       (gs/next 'unify/trunk/trunk)]
                       [#f])]
                 [{{'kvar kv1 dl1} {'kvar kv2 dl2}}
                  (if3 [(equal? {adl1 sdl1 i1}
@@ -1154,7 +1151,7 @@
                                    'ex *unify*
                                    'dl+ (reverse (cons kv1 dl1))
                                    'dl- (reverse (cons kv2 dl2))))
-                       (gs/next)]
+                       (gs/next 'unify/trunk/trunk)]
                       [#f])]
                 [__ #f])])])))
 
@@ -1167,41 +1164,37 @@
             [dl-ajj1 (call-with-output-to-new-ds
                       (lambda ()
                         (push rs (% rsp-proto
-                                    'ex   compose
                                     'vrc  vrc1
                                     'jj   ajj1))
-                        (rs/next)))]
+                        (rs/next 'unify/arrow/arrow:dl-ajj1)))]
             [dl-ajj2 (call-with-output-to-new-ds
                       (lambda ()
                         (push rs (% rsp-proto
-                                    'ex   compose
                                     'vrc  vrc2
                                     'jj   ajj2))
-                        (rs/next)))])
+                        (rs/next 'unify/arrow/arrow:dl-ajj2)))])
        (if3 [(push gs (% gsp-proto
                          'ex *unify*
                          'dl+ (reverse dl-ajj1)
                          'dl- (reverse dl-ajj2)))
-             (gs/next)]
+             (gs/next 'unify/arrow/arrow:ajj1&ajj2)]
             [(let* ([dl-sjj1 (call-with-output-to-new-ds
                               (lambda ()
                                 (push rs (% rsp-proto
-                                            'ex   compose
                                             'vrc  vrc1
                                             'jj   sjj1))
-                                (rs/next)))]
+                                (rs/next 'unify/arrow/arrow:dl-sjj1)))]
                     [dl-sjj2 (call-with-output-to-new-ds
                               (lambda ()
                                 (push rs (% rsp-proto
-                                            'ex   compose
                                             'vrc  vrc2
                                             'jj   sjj2))
-                                (rs/next)))])
+                                (rs/next 'unify/arrow/arrow:dl-sjj2)))])
                (push gs (% gsp-proto
                            'ex (cons `(unify ,m) (unify m))
                            'dl+ (reverse dl-sjj1)
                            'dl- (reverse dl-sjj2)))
-               (gs/next))]
+               (gs/next 'unify/arrow/arrow:sjj1&sjj2))]
             [(debug0 'unify/arrow/arrow
                ("unify fail~%")
                ("ajj1 : ~a~%" ajj1)
@@ -1230,7 +1223,7 @@
                   (if (up-unify/data/data m
                                           (list-ref dl1 c)
                                           (list-ref dl2 c))
-                    (gs/next)
+                    (gs/next 'up-unify)
                     #f)])]))))
 
 ;; note that
@@ -1291,10 +1284,9 @@
              (list-ref (update-trunky! k (call-with-output-to-new-ds
                                           (lambda ()
                                             (push rs (% rsp-proto
-                                                        'ex   compose
                                                         'vrc  vrc
                                                         'jj   sjj))
-                                            (rs/next))))
+                                            (rs/next 'try-trunk))))
                        i)]
             [#f
              (set! ds ds0)
@@ -1424,41 +1416,37 @@
             [dl-tajj (call-with-output-to-new-ds
                       (lambda ()
                         (push rs (% rsp-proto
-                                    'ex  compose
                                     'vrc tvrc
                                     'jj  tajj))
-                        (rs/next)))]
+                        (rs/next 'type-check/arrow:tajj)))]
             [dl-ajj (call-with-output-to-new-ds
                      (lambda ()
                        (push rs (% rsp-proto
-                                   'ex  compose
                                    'vrc vrc
                                    'jj  ajj))
-                       (rs/next)))])
+                       (rs/next 'type-check/arrow:ajj)))])
        (if3 [(push gs (% gsp-proto
                          'ex     *up-unify*
                          'dl+    (reverse dl-ajj)
                          'dl-    (reverse dl-tajj)))
-             (gs/next)]
+             (gs/next 'type-check/arrow:ajj&tajj)]
             [(let* ([dl-tsjj (call-with-output-to-new-ds
                               (lambda ()
                                 (push rs (% rsp-proto
-                                            'ex  compose
                                             'vrc tvrc
                                             'jj  tsjj))
-                                (rs/next)))]
+                                (rs/next 'type-check/arrow:tsjj)))]
                     [dl-sjj (call-with-output-to-new-ds
                              (lambda ()
                                (push rs (% rsp-proto
-                                           'ex  compose
                                            'vrc vrc
                                            'jj  sjj))
-                               (rs/next)))])
+                               (rs/next 'type-check/arrow:sjj)))])
                (if3 [(push gs (% gsp-proto
                                  'ex     *up-cover*
                                  'dl+    (reverse dl-sjj)
                                  'dl-    (reverse dl-tsjj)))
-                     (gs/next)]
+                     (gs/next 'type-check/arrow:sjj&tsjj)]
                     [(set! ds ds0)
                      (set! bs bs0)
                      (set! gs gs0)

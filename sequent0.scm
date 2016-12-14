@@ -153,17 +153,21 @@
      (map print-data sdl)
      (cat ("~a) " k))]))
 
-;; note that
-;;   bsp can be '(commit-point)
 (: bs {(id . ls) ...})
 (: id (vector (name . counter) ls))
 (: ls {(level . data) ...})
 
 (define (print-bsp bsp)
-  (print-id (car bsp))
-  (cat ("~%"))
-  (cat ("  ")) (print-ls (cdr bsp))
-  (cat ("~%")))
+  ;; note that
+  ;;   bsp can be '(commit-point)
+  (if3 [(equal? bsp '(commit-point))]
+       [(cat ("~%")
+             ("  (commit-point)~%")
+             ("~%"))]
+       [(print-id (car bsp))
+        (cat ("~%"))
+        (cat ("  ")) (print-ls (cdr bsp))
+        (cat ("~%"))]))
 
 (define (print-id id)
   (let* ([p (vector-ref id 0)]
@@ -555,8 +559,12 @@
                  [(eq? user-input 'q)
                   (cat ("steper: quit~%"))
                   (steper-)]
-                 [(pair? user-input)
-                  (eval user-input)]
+                 [(eq? user-input 'rs)
+                  (map (lambda (who) (cat ("  ~a~%" who)))
+                    rs/next/who-list)]
+                 [(eq? user-input 'gs)
+                  (map (lambda (who) (cat ("  ~a~%" who)))
+                    gs/next/who-list)]
                  [else
                   (cat ("steper: unknown command :: ~a~%" user-input))
                   (steper)]))]))
@@ -730,12 +738,14 @@
                                 'jj   ajj))
                     (rs/next 'compose/cons)))])]
          [dl (pop-list ds (length tdl))])
-    (if3 [(push gs (% gsp-proto
+    (if3 [(push bs '(commit-point))
+          (push gs (% gsp-proto
                       'ex *up-unify*
                       'dl+ (reverse dl)
                       'dl- (reverse tdl)))
           (gs/next 'compose/cons)]
-         [(push ds (list 'cons n dl))]
+         [(bs/commit)
+          (push ds (list 'cons n dl))]
          [(debug0 'compose/cons
             ("unify fail~%")
             ("dl : ~a~%" dl)
@@ -773,12 +783,14 @@
                                 'jj   ajj))
                     (rs/next 'compose/body:ajj)))]
             [dl (tos-list ds (length tdl))])
-       (if3 [(push gs (% gsp-proto
+       (if3 [(push bs '(commit-point))
+             (push gs (% gsp-proto
                          'ex *up-unify*
                          'dl+ (reverse dl)
                          'dl- (reverse tdl)))
              (gs/next 'compose/body)]
-            [(match (compose/try-body b)
+            [(bs/commit)
+             (match (compose/try-body b)
                [{sjj vrc}
                 (push rs (% rsp-proto
                             'vrc  vrc

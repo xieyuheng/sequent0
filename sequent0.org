@@ -1,9 +1,7 @@
 #+PROPERTY: tangle sequent0.scm
 #+title: sequent0
 
-- review the commit problem
-  not only in compose/try-body
-  but more
+- review the commit too much problem
 
 - all that form trunk should up-unify its type to data
   apply included
@@ -39,24 +37,6 @@
       are uni-lambda & uni-arrow indeed
       they just have empty frc [free-var-record]
 
-*** note about functions which call rs/next or gs/next
-
-    | compose           | rs    | inner-interpreter                         |
-    | compose/cons      | rs gs | for up-unify tdl to data in ds            |
-    | compose/body      | rs gs | up-unify tdl & compose sjj                |
-    | compose/try-body  | rs gs | cover ajj to data in ds                   |
-    | create-trunk-list | rs    | to get adl sdl in trunk (as type-arrow)   |
-    | type/input-number | rs    | compose ajj                               |
-    | try-trunk         | rs    | compose sjj when compose/try-body success |
-    |-------------------+-------+-------------------------------------------|
-    | d2t               | rs    | a->sdl                                    |
-    | type-check/arrow  | rs gs | dl-tajj dl-ajj dl-tsjj dl-sjj             |
-    |-------------------+-------+-------------------------------------------|
-    | unify & up-unify  | gs    | inner-interpreter                         |
-    | unify/data/data   | gs    | nested dl in cons                         |
-    | unify/trunk/trunk | gs    | nested dl in trunk                        |
-    | unify/arrow/arrow | rs gs | dl-ajj1 dl-ajj2 dl-sjj1 dl-sjj2           |
-
 *** note about frc
 
     - when return arrow & lambda
@@ -64,6 +44,36 @@
 
     - when generate vrc by (nl->vrc nl)
       also use fnl
+
+*** note about functions which call rs/next or gs/next
+
+    | compose           | rs |    | inner-interpreter                         |
+    | compose/cons      | rs | gs | for up-unify tdl to data in ds            |
+    | compose/body      | rs | gs | up-unify tdl & compose sjj                |
+    | compose/try-body  | rs | gs | cover ajj to data in ds                   |
+    | create-trunk-list | rs |    | to get adl sdl in trunk (as type-arrow)   |
+    | type/input-number | rs |    | compose ajj                               |
+    | try-trunk         | rs |    | compose sjj when compose/try-body success |
+    |-------------------+----+----+-------------------------------------------|
+    | d2t               | rs |    | a->sdl                                    |
+    | type-check/arrow  | rs | gs | dl-tajj dl-ajj dl-tsjj dl-sjj             |
+    |-------------------+----+----+-------------------------------------------|
+    | unify & up-unify  |    | gs | inner-interpreter                         |
+    | unify/data/data   |    | gs | nested dl in cons                         |
+    | unify/trunk/trunk |    | gs | nested dl in trunk                        |
+    | unify/arrow/arrow | rs | gs | dl-ajj1 dl-ajj2 dl-sjj1 dl-sjj2           |
+
+*** note about commit & undo
+
+    - commit not only for compose/try-body
+      but also for compose/cons & compose/body
+      for they are up-unify tdl to data in ds
+      whenever no need to undo
+      we can do commit
+
+*** note about commit too much problem
+
+    - ><><><
 
 *** terminology
 
@@ -78,7 +88,6 @@
     | jo      | data          | double data |
     |---------+---------------+-------------|
     | compose | bs/deep & d2t | unify       |
-
 
 *** syntax
 
@@ -272,17 +281,21 @@
 *** print-bsp
 
     #+begin_src scheme
-    ;; note that
-    ;;   bsp can be '(commit-point)
     (: bs {(id . ls) ...})
     (: id (vector (name . counter) ls))
     (: ls {(level . data) ...})
 
     (define (print-bsp bsp)
-      (print-id (car bsp))
-      (cat ("~%"))
-      (cat ("  ")) (print-ls (cdr bsp))
-      (cat ("~%")))
+      ;; note that
+      ;;   bsp can be '(commit-point)
+      (if3 [(equal? bsp '(commit-point))]
+           [(cat ("~%")
+                 ("  (commit-point)~%")
+                 ("~%"))]
+           [(print-id (car bsp))
+            (cat ("~%"))
+            (cat ("  ")) (print-ls (cdr bsp))
+            (cat ("~%"))]))
 
     (define (print-id id)
       (let* ([p (vector-ref id 0)]
@@ -1049,12 +1062,14 @@
                                       'jj   ajj))
                           (rs/next 'compose/cons)))])]
                [dl (pop-list ds (length tdl))])
-          (if3 [(push gs (% gsp-proto
+          (if3 [(push bs '(commit-point))
+                (push gs (% gsp-proto
                             'ex *up-unify*
                             'dl+ (reverse dl)
                             'dl- (reverse tdl)))
                 (gs/next 'compose/cons)]
-               [(push ds (list 'cons n dl))]
+               [(bs/commit)
+                (push ds (list 'cons n dl))]
                [(debug0 'compose/cons
                   ("unify fail~%")
                   ("dl : ~a~%" dl)
@@ -1098,12 +1113,14 @@
                                         'jj   ajj))
                             (rs/next 'compose/body:ajj)))]
                     [dl (tos-list ds (length tdl))])
-               (if3 [(push gs (% gsp-proto
+               (if3 [(push bs '(commit-point))
+                     (push gs (% gsp-proto
                                  'ex *up-unify*
                                  'dl+ (reverse dl)
                                  'dl- (reverse tdl)))
                      (gs/next 'compose/body)]
-                    [(match (compose/try-body b)
+                    [(bs/commit)
+                     (match (compose/try-body b)
                        [{sjj vrc}
                         (push rs (% rsp-proto
                                     'vrc  vrc

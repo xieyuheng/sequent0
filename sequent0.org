@@ -5,18 +5,19 @@
   not only in compose/try-body
   but more
 
+- all that form trunk should up-unify its type to data
+  apply included
+
 * todo
 
-  - all that form trunk should up-unify its type to data
-    apply included
+  - [maybe] module system
+    - should not allow redefine as it is in example now
 
   - fix d2t
 
   - need much more tests to show that type-check is 'safe'
     program that should not be checked
     must not be checked
-
-  - should not allow redefine
 
   - recur-check
 
@@ -794,9 +795,15 @@
                      [(eq? user-input 'n)
                       (cat (":~a:~%" steper-counter))
                       (print-rs)]
-                     [(eq? user-input 'exit)
-                      (cat ("steper: exit~%"))
+                     [(eq? user-input 'q)
+                      (cat ("steper: quit~%"))
                       (steper-)]
+                     [(eq? user-input 'rs)
+                      (map (lambda (who) (cat ("  ~a~%" who)))
+                        rs/next/who-list)]
+                     [(eq? user-input 'gs)
+                      (map (lambda (who) (cat ("  ~a~%" who)))
+                        gs/next/who-list)]
                      [else
                       (cat ("steper: unknown command :: ~a~%" user-input))
                       (steper)]))]))

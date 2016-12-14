@@ -552,9 +552,11 @@
                  [(eq? user-input 'n)
                   (cat (":~a:~%" steper-counter))
                   (print-rs)]
-                 [(eq? user-input 'exit)
-                  (cat ("steper: exit~%"))
+                 [(eq? user-input 'q)
+                  (cat ("steper: quit~%"))
                   (steper-)]
+                 [(pair? user-input)
+                  (eval user-input)]
                  [else
                   (cat ("steper: unknown command :: ~a~%" user-input))
                   (steper)]))]))

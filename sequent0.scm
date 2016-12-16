@@ -606,6 +606,8 @@
    ;; 'compose/cons
    ;; 'compose/body
    ;; 'compose/try-body
+   ;; 'compose/apply
+   ;; 'create-trunk-list:dl&tadl
    'unify
    'unify/data/data:cons
    'unify/trunk/trunk
@@ -823,32 +825,42 @@
              (set! gs gs0)
              (compose/try-body r)]))]))
 
-;; ><><><
-;; need after-d2t-unify for adl and dl
 (define (create-trunk-list t b dl)
   (match t
     [{'uni-arrow nl frc ajj sjj}
      (let* ([vrc (append frc (nl->vrc nl))]
-            [adl (call-with-output-to-new-ds
-                  (lambda ()
-                    (push rs (% rsp-proto
-                                'vrc  vrc
-                                'jj   ajj))
-                    (rs/next 'create-trunk-list:ajj)))]
-            [sdl (call-with-output-to-new-ds
-                  (lambda ()
-                    (push rs (% rsp-proto
-                                'vrc  vrc
-                                'jj   sjj))
-                    (rs/next 'create-trunk-list:sjj)))]
+            [idl (vrc->idl frc)]
+            [tadl (call-with-output-to-new-ds
+                   (lambda ()
+                     (push rs (% rsp-proto
+                                 'vrc  vrc
+                                 'jj   ajj))
+                     (rs/next 'create-trunk-list:ajj)))]
+            [tsdl (call-with-output-to-new-ds
+                   (lambda ()
+                     (push rs (% rsp-proto
+                                 'vrc  vrc
+                                 'jj   sjj))
+                     (rs/next 'create-trunk-list:sjj)))]
             [k (match b
                  [('uni-var . __)
                   (vector {'kvar b dl})]
                  [__
                   (vector {'todo b dl})])])
-       (reverse
-        (map (lambda (i) {'trunk adl sdl k i})
-          (genlist (length sdl)))))]))
+       (if3 [(push bs '(commit-point))
+             (push gs (% gsp-proto
+                         'ex *up-unify*
+                         'dl+ (reverse dl)
+                         'dl- (reverse tadl)))
+             (gs/next 'create-trunk-list:dl&tadl)]
+            [(bs/commit idl)
+             (reverse
+              (map (lambda (i) {'trunk tadl tsdl k i})
+                (genlist (length tsdl))))]
+            [(debug0 'create-trunk-list
+               ("unify fail~%")
+               ("dl : ~a~%" dl)
+               ("tadl : ~a~%" tadl))]))]))
 
 (define (arrow->uni-arrow a)
   (match a
@@ -882,22 +894,9 @@
                            (push rs (% rsp-proto
                                        'vrc  (append frc (nl->vrc nl))
                                        'jj   ajj))
-                           (rs/next 'compose/cons)))]
-
-                   [idl (vrc->idl frc)]
+                           (rs/next 'compose/apply)))]
                    [dl (pop-list ds (length tdl))])
-              (if3 [(push bs '(commit-point))
-                    (push gs (% gsp-proto
-                                'ex *up-unify*
-                                'dl+ (reverse dl)
-                                'dl- (reverse tdl)))
-                    (gs/next 'compose/cons)]
-                   [(bs/commit idl)
-                    (push-list ds (create-trunk-list t b dl))]
-                   [(debug0 'compose/apply
-                      ("unify fail~%")
-                      ("dl : ~a~%" dl)
-                      ("tdl : ~a~%" tdl))]))]
+              (push-list ds (create-trunk-list t b dl)))]
            [__ (debug0 'compose/apply
                  ("compose/apply meet uni-var whoes type is not uni-arrow~%")
                  ("uni-var : ~a~%" d)

@@ -437,26 +437,6 @@
                               bs))
          (push bs `(,id . ((,level . ,d))))))]))
 
-;; in compose/var
-;;   extend bs whenever meet a new var
-;;   this helps commit
-
-;; not using ><><><
-(define (bs/extend-new uv d)
-  (: uni-var data -> !)
-  (match uv
-    [{'uni-var id level}
-     (push bs `(,id . ((,level . ,d))))]))
-
-;; (define (bs/extend-new v d)
-;;   (: var data -> !)
-;;   (match v
-;;     [{'uni-var id level}
-;;      (let ([found/ls (assq id bs)])
-;;        (if found/ls
-;;          (void)
-;;          (push bs `(,id . ()))))]))
-
 (define (id->ls id)
   (vector-ref id 1))
 
@@ -647,10 +627,6 @@
 
 (define id/counter 0)
 
-;; (define (id/new n ls)
-;;   (set! id/counter (+ 1 id/counter))
-;;   (vector (cons n id/counter) ls))
-
 (define (id/new n)
   (set! id/counter (+ 1 id/counter))
   (vector (cons n id/counter) '()))
@@ -710,8 +686,6 @@
     ['apply         (compose/apply j)]))
 
 (define (compose/var j)
-  ;; (if (uni-var/fresh? j)
-  ;;   (bs/extend-new j))
   (let* ([n (match j
               [{'var n} n]
               [{'fvar n} n])]
@@ -890,26 +864,6 @@
      (push ds {'uni-lambda (arrow->uni-arrow a)
                            (map arrow->uni-arrow al)})]))
 
-(define (type/input-number t)
-  (match t
-    [{'uni-arrow nl frc ajj sjj}
-     (length (call-with-output-to-new-ds
-              (lambda ()
-                (push rs (% rsp-proto
-                            'vrc  (append frc (nl->vrc nl))
-                            'jj  ajj))
-                (rs/next 'type/input-number))))]))
-
-;; (define (type/output-number t)
-;;   (match t
-;;     [{'uni-arrow nl frc ajj sjj}
-;;      (length (call-with-output-to-new-ds
-;;               (lambda ()
-;;                 (push rs (% rsp-proto
-;;                             'vrc  (append frc (nl->vrc nl))
-;;                             'jj  sjj))
-;;                 (rs/next 'type/output-number))))]))
-
 ;; note that
 ;;   compose/apply can form trunk too
 ;;   the body of trunk formed by apply is uni-var
@@ -923,8 +877,27 @@
               [b d])
          (match t
            [{'uni-arrow nl frc ajj sjj}
-            (let ([dl (pop-list ds (type/input-number t))])
-              (push-list ds (create-trunk-list t b dl)))]
+            (let* ([tdl (call-with-output-to-new-ds
+                         (lambda ()
+                           (push rs (% rsp-proto
+                                       'vrc  (append frc (nl->vrc nl))
+                                       'jj   ajj))
+                           (rs/next 'compose/cons)))]
+
+                   [idl (vrc->idl frc)]
+                   [dl (pop-list ds (length tdl))])
+              (if3 [(push bs '(commit-point))
+                    (push gs (% gsp-proto
+                                'ex *up-unify*
+                                'dl+ (reverse dl)
+                                'dl- (reverse tdl)))
+                    (gs/next 'compose/cons)]
+                   [(bs/commit idl)
+                    (push-list ds (create-trunk-list t b dl))]
+                   [(debug0 'compose/apply
+                      ("unify fail~%")
+                      ("dl : ~a~%" dl)
+                      ("tdl : ~a~%" tdl))]))]
            [__ (debug0 'compose/apply
                  ("compose/apply meet uni-var whoes type is not uni-arrow~%")
                  ("uni-var : ~a~%" d)

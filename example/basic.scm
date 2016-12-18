@@ -172,11 +172,19 @@
     cons/has-length (-> [:l :n has-length]
                         [:l :a cons :n succ has-length])))
 
+;; (steper+)
+
 (def map/has-length
   (lambda (-> [:l :n has-length]
               [:l :f map :n has-length])
     (-> [null/has-length] [null/has-length])
     (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
+
+;; (def map/has-length
+;;   (lambda (-> [:l :n has-length]
+;;               [:l (-> [:t1] [:t2]) %:f :f map :n has-length])
+;;     (-> [null/has-length] [null/has-length])
+;;     (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
 
 (def vector
   (type (-> [nat type] [type])

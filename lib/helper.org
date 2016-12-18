@@ -3,24 +3,36 @@
 * cat & orz
 
   #+begin_src scheme
-  (define-syntax cating
-    (syntax-rules ()
-      [(cating (str . args))
-      (format #f str . args)]
-      [(cat (str . args) (str2 . args2) ...)
-       (string-append
-        (cating (str . args))
-        (cating (str2 . args2) ...))]))
+  (define-macro (cat-one e)
+    (cond [(and (pair? e)
+                (string? (car e)))
+           (let ([str (car e)]
+                 [args (cdr e)])
+             `(format #t ,str . ,args))]
+          [(and (pair? e)
+                (not (string? (car e))))
+           e]
+          [else
+           `(error 'cat-one)]))
 
-  (define-syntax cat
-    (syntax-rules ()
-      [(cat e ...)
-       (format #t (cating e ...))]))
+  (define-macro (cat . l)
+    (if (null? l)
+      `(void)
+      (let* ([h (car l)]
+             [r (cdr l)])
+        `(let ()
+           (cat-one ,h)
+           (cat . ,r)))))
 
-  (define-syntax orz
-    (syntax-rules ()
-      [(orz who c ...)
-       (error who (cating ("~%") c ...))]))
+  (define-macro (orz who . l)
+    `(let ()
+       (cat ("~%")
+            ("<~a>~%" ,who)
+            (cat . ,l)
+            ("~%")
+            ("</~a>~%" ,who)
+            ("~%"))
+       (error ,who "")))
   #+end_src
 
 * if3

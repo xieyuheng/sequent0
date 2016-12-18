@@ -9,6 +9,7 @@
         ("  field : ~a~%" field)))))
 
 ;; clone-with-new-fields
+;;   which does no side-effect on object
 (define (% object . rest)
   (define (loop o l)
     (if (null? l)

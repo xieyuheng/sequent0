@@ -38,15 +38,9 @@
    uni-var ~
    uni-lambda ~)
 
-(define-syntax debug0
-  (syntax-rules ()
-    [(debug0 who c ...)
-     (let ()
-       (print-ds)
-       (print-rs)
-       (print-gs)
-       (print-bs)
-       (error who (cating ("~%") c ...)))]))
+(define-macro (debug0 who . l)
+  `(let ()
+     (orz ,who . ,l)))
 
 (define-macro (push s v) `(set! ,s (cons ,v ,s)))
 
@@ -102,22 +96,22 @@
     [{'bind n} (cat ("%~a " n))]
     [{'call n} (cat ("~a " n))]
     [{'arrow nl fnl ajj sjj}
-     (cat ("(-> "))
-     (cat ("[ ")) (map print-jo ajj) (cat ("] "))
-     (cat ("[ ")) (map print-jo sjj) (cat ("]) "))]
+     (cat ("( -> "))
+     (cat ("[ ")) (for-each print-jo ajj) (cat ("] "))
+     (cat ("[ ")) (for-each print-jo sjj) (cat ("] ) "))]
     [{'uni-arrow nl frc ajj sjj}
-     (cat ("(-> "))
-     (cat ("[ ")) (map print-jo ajj) (cat ("] "))
-     (cat ("[ ")) (map print-jo sjj) (cat ("]) "))]
+     (cat ("( -> "))
+     (cat ("[ ")) (for-each print-jo ajj) (cat ("] "))
+     (cat ("[ ")) (for-each print-jo sjj) (cat ("] ) "))]
     [{'lambda a al}
-     (cat ("(lambda "))
+     (cat ("( <lambda> "))
      (print-jo a)
-     (map print-jo al)
+     (for-each print-jo al)
      (cat (") "))]
     [{'uni-lambda a al}
-     (cat ("(lambda "))
+     (cat ("( <lambda> "))
      (print-jo a)
-     (map print-jo al)
+     (for-each print-jo al)
      (cat (") "))]
     [{'apply}
      (cat ("@ "))]))
@@ -129,11 +123,11 @@
             [n (car p)]
             [c (cdr p)]
             [ls (vector-ref id 1)])
-       (cat ("(~a #~a ^~a" n c level))
+       (cat ("( <var> ~a #~a ^~a " n c level))
        (print-ls ls)
        (cat (") ")))]
     [{'uni-bind uv d}
-     (cat ("(:%: "))
+     (cat ("( <bind> "))
      (print-data uv)
      (print-data d)
      (cat (") "))]
@@ -141,17 +135,37 @@
      (if3 [(null? dl)]
           [(cat ("~a " n))]
           [(cat ("[ ~a " n))
-           (map print-data dl)
+           (for-each print-data dl)
            (cat ("] "))])]
     [('uni-arrow . __)
      (print-jo d)]
     [('uni-lambda . __)
      (print-jo d)]
     [{'trunk adl sdl k i}
-     (cat ("(:trunk: #~a " i))
-     (map print-data adl)
-     (map print-data sdl)
-     (cat ("~a) " k))]))
+     (cat ("( <trunk> #~a " i))
+     ;; (for-each print-data adl)
+     ;; (for-each print-data sdl)
+     (print-trunky (get-trunky k))
+     (cat (") "))]))
+
+(: trunky
+   todo               {uni-arrow ...} {data ...}
+   kvar               kv {data ...}
+   done               {data ...})
+
+(define (print-trunky k)
+  (match k
+    [{'todo ual dl}
+     (cat (":todo: "))
+     (cat (":dl: ")) (for-each print-data dl)
+     (cat (":ual: ")) (for-each print-data ual)]
+    [{'kvar kv dl}
+     (cat (":kvar: "))
+     (cat (":dl: ")) (for-each print-data dl)
+     (cat (":kv: ")) (print-data kv)]
+    [{'done dl}
+     (cat (":done: "))
+     (cat (":dl: ")) (for-each print-data dl)]))
 
 (: bs {(id . ls) ...})
 (: id (vector (name . counter) ls))
@@ -162,12 +176,13 @@
   ;;   bsp can be '(commit-point)
   (if3 [(equal? bsp '(commit-point))]
        [(cat ("~%")
-             ("  (commit-point)~%")
+             ("  <commit-point>~%")
              ("~%"))]
        [(print-id (car bsp))
-        (cat ("~%"))
-        (cat ("  ")) (print-ls (cdr bsp))
-        (cat ("~%"))]))
+        (cat ("~%")
+             ("  ") (print-ls (cdr bsp))
+             ("~%")
+             ("~%"))]))
 
 (define (print-id id)
   (let* ([p (vector-ref id 0)]
@@ -179,11 +194,13 @@
 (define (print-lsp lsp)
   (let ([level (car lsp)]
         [d (cdr lsp)])
-    (cat (":~a: " level))
+    (cat (":~a: " (case level
+                    [0 "DATA"]
+                    [1 "TYPE"])))
     (print-data d)))
 
 (define (print-ls ls)
-  (map print-lsp ls))
+  (for-each print-lsp ls))
 
 (define (print-nsp nsp)
   (let ([n0 (car nsp)]
@@ -198,34 +215,34 @@
        (cat ("  :belong-to: ~a~%" n0)) ]
       [{'meaning-lambda a al}
        (cat ("  :type: ")) (print-jo a) (cat ("~%"))
-       (cat ("  :lambda: ")) (map print-jo al) (cat ("~%"))])
+       (cat ("  :lambda: ")) (for-each print-jo al) (cat ("~%"))])
     (cat ("~%"))))
 
 (define (print-ds)
   (if3 [(null? ds)]
        [(cat ("~%<ds>~%</ds>~%~%"))]
        [(cat ("~%<ds>~%"))
-        (cat ("  ")) (map print-data ds)
+        (cat ("  ")) (for-each print-data ds)
         (cat ("~%</ds>~%~%"))]))
 
 (define (print-bs)
   (cat ("~%<bs>~%"))
-  (map print-bsp bs)
+  (for-each print-bsp bs)
   (cat ("</bs>~%~%")))
 
 (define (print-ns)
   (cat ("~%<ns>~%"))
-  (map print-nsp ns)
+  (for-each print-nsp ns)
   (cat ("</ns>~%~%")))
 
 (define (print-rs)
   (cat ("~%<rs>~%"))
-  (map (lambda (o) (@ o 'print)) rs)
+  (for-each (lambda (o) (@ o 'print)) rs)
   (cat ("</rs>~%~%")))
 
 (define (print-gs)
   (cat ("~%<gs>~%"))
-  (map (lambda (o) (@ o 'print)) gs)
+  (for-each (lambda (o) (@ o 'print)) gs)
   (cat ("</gs>~%~%")))
 
 (define (print-env)
@@ -529,16 +546,19 @@
   (cond [(> steper-counter 0)
          (set! steper-counter (- steper-counter 1))
          (cat (":~a:~%" steper-counter))
-         (print-rs)]
+         (print-rs)
+         (print-gs)]
         [else
          (let ([user-input (read)])
            (cond [(number? user-input)
                   (set! steper-counter user-input)
                   (cat (":~a:~%" steper-counter))
-                  (print-rs)]
+                  (print-rs)
+                  (print-gs)]
                  [(eq? user-input 'n)
                   (cat (":~a:~%" steper-counter))
-                  (print-rs)]
+                  (print-rs)
+                  (print-gs)]
                  [(eq? user-input 'q)
                   (cat ("steper: quit~%"))
                   (steper-)]
@@ -557,10 +577,7 @@
              (member who rs/next/who-list))
     (cat ("~a:" who))
     (steper))
-  (rs/next/call-ex))
-
-(define (rs/next/call-ex)
-  (let ([ex (^ (tos rs) 'ex)])
+  (let* ([ex (^ (tos rs) 'ex)])
     (ex)))
 
 (define rs/next/who-list
@@ -574,8 +591,8 @@
    ;; 'create-trunk-list:sjj
    ;; 'type/input-number
    ;; 'type/output-number
-   ;; 'd2t:a->sdl:ajj
-   ;; 'd2t:a->sdl:sjj
+   ;; 'd2t/cons:ajj
+   ;; 'd2t/cons:sjj
    ;; 'unify/arrow/arrow:dl-ajj1
    ;; 'unify/arrow/arrow:dl-ajj2
    ;; 'unify/arrow/arrow:dl-sjj1
@@ -593,10 +610,6 @@
              (member who gs/next/who-list))
     (cat ("~a:" who))
     (steper))
-  (gs/next/call-ex))
-
-(define (gs/next/call-ex)
-  (: -> bool)
   (let* ([p (^ (tos gs) 'ex)]
          [ex (cdr p)])
     (ex)))
@@ -608,6 +621,7 @@
    ;; 'compose/try-body
    ;; 'compose/apply
    ;; 'create-trunk-list:dl&tadl
+   ;; 'd2t/cons:re-up-unify
    'unify
    'unify/data/data:cons
    'unify/trunk/trunk
@@ -667,14 +681,15 @@
   (map name->fvar-record fnl))
 
 (define (compose)
-  (let* ([rsp (pop rs)]
+  (let* ([rsp (tos rs)]
          [c   (^ rsp 'c)]
          [ex  (^ rsp 'ex)]
          [jj  (^ rsp 'jj)])
     (if3 [(>= c (length jj))]
-         []
-         [(push rs (% rsp 'c (+ 1 c)))
-          (compose/jo (list-ref jj c))
+         [(pop rs)]
+         [(compose/jo (list-ref jj c))
+          (pop rs)
+          (push rs (% rsp 'c (+ 1 c)))
           (rs/next 'compose)])))
 
 (define (compose/jo j)
@@ -717,26 +732,28 @@
 (define (compose/cons n a)
   (match a
     [{'uni-arrow nl frc ajj sjj}
-     (let* ([tdl (call-with-output-to-new-ds
-                  (lambda ()
-                    (push rs (% rsp-proto
-                                'vrc  (append frc (nl->vrc nl))
-                                'jj   ajj))
-                    (rs/next 'compose/cons)))]
+     (let* ([tadl (call-with-output-to-new-ds
+                   (lambda ()
+                     (push rs (% rsp-proto
+                                 'vrc  (append frc (nl->vrc nl))
+                                 'jj   ajj))
+                     (rs/next 'compose/cons)))]
             [idl (vrc->idl frc)]
-            [dl (pop-list ds (length tdl))])
+            [dl (pop-list ds (length tadl))])
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
                          'ex *up-unify*
                          'dl+ (reverse dl)
-                         'dl- (reverse tdl)))
+                         'dl- (reverse tadl)
+                         'back (lambda ()
+                                 (debug0 'compose/cons
+                                   ("unify fail~%")
+                                   ("dl   : ~a~%" dl)
+                                   ("tadl : ~a~%" tadl)))))
              (gs/next 'compose/cons)]
             [(bs/commit idl)
              (push ds (list 'cons n dl))]
-            [(debug0 'compose/cons
-               ("unify fail~%")
-               ("dl : ~a~%" dl)
-               ("tdl : ~a~%" tdl))]))]))
+            []))]))
 
 (: [for the first covering arrow]
    (push gs {cover commit
@@ -773,9 +790,14 @@
             [dl (tos-list ds (length tdl))])
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
-                         'ex *up-unify*
-                         'dl+ (reverse dl)
-                         'dl- (reverse tdl)))
+                         'ex   *up-unify*
+                         'dl+  (reverse dl)
+                         'dl-  (reverse tdl)
+                         'back (lambda ()
+                                 (debug0 'compose/body
+                                   ("up-unify fail~%")
+                                   ("dl  : ~a~%" dl)
+                                   ("tdl : ~a~%" tdl)))))
              (gs/next 'compose/body)]
             [(bs/commit idl)
              (match (compose/try-body b)
@@ -787,10 +809,7 @@
                [#f
                 (let ([dl (pop-list ds (length tdl))])
                   (push-list ds (create-trunk-list t b dl)))])]
-            [(debug0 'compose/body
-               ("up-unify fail~%")
-               ("dl  : ~a~%" dl)
-               ("tdl : ~a~%" tdl))]))]))
+            []))]))
 
 (define (compose/try-body b)
   (: body -> (or #f {sjj vrc}))
@@ -815,7 +834,8 @@
              (push gs (% gsp-proto
                          'ex   *cover*
                          'dl+  (reverse dl1)
-                         'dl-  (reverse dl2)))
+                         'dl-  (reverse dl2)
+                         'back (lambda () #f)))
              (gs/next 'compose/try-body)]
             ;; commit or undo
             [(bs/commit idl)
@@ -849,18 +869,20 @@
                   (vector {'todo b dl})])])
        (if3 [(push bs '(commit-point))
              (push gs (% gsp-proto
-                         'ex *up-unify*
-                         'dl+ (reverse dl)
-                         'dl- (reverse tadl)))
+                         'ex   *up-unify*
+                         'dl+  (reverse dl)
+                         'dl-  (reverse tadl)
+                         'back (lambda ()
+                                 (debug0 'create-trunk-list
+                                   ("unify fail~%")
+                                   ("dl : ~a~%" dl)
+                                   ("tadl : ~a~%" tadl)))))
              (gs/next 'create-trunk-list:dl&tadl)]
             [(bs/commit idl)
              (reverse
               (map (lambda (i) {'trunk tadl tsdl k i})
                 (genlist (length tsdl))))]
-            [(debug0 'create-trunk-list
-               ("unify fail~%")
-               ("dl : ~a~%" dl)
-               ("tadl : ~a~%" tadl))]))]))
+            []))]))
 
 (define (arrow->uni-arrow a)
   (match a
@@ -918,9 +940,9 @@
       (cat ("  <rsp>~%")
            ("    :counter: ~a~%" (^ o 'c))
            ("    :var-record:~%"))
-      (map print-vrcp (^ o 'vrc))
+      (for-each print-vrcp (^ o 'vrc))
       (cat ("    :jojo: "))
-      (map print-jo (^ o 'jj))
+      (for-each print-jo (^ o 'jj))
       (cat ("~%"))
       (cat ("  </rsp>~%"))))))
 
@@ -934,55 +956,37 @@
     'c      0
     'ex     '(explainer)
     'dl+    '(data-list)
-    'dl-    '(data-list))
+    'dl-    '(data-list)
+    'back   '(call-back-on-fail))
    (pair-list
     'print
     (lambda (o)
       (cat ("  <gsp>~%")
            ("    :counter: ~a~%"   (^ o 'c))
-           ("    :explainer: ~a~%" (car (^ o 'ex))))
-      (cat ("    :double-data-list:~%"))
-      (map (lambda (d+ d-)
-             (cat ("      :+: "))
-             (print-data d+)
-             (cat (":-: "))
-             (print-data d-)
-             (cat ("~%")))
-        (^ o 'dl+) (^ o 'dl-))
-      (cat ("  </gsp>~%"))))))
+           ("    :explainer: ~a~%" (car (^ o 'ex)))
+           ("    :dl+:~%")
+           (map (lambda (d)
+                  (cat (print-data d)
+                       ("~%")))
+             (^ o 'dl+))
+           ("    :dl-:~%")
+           (map (lambda (d)
+                  (cat (print-data d)
+                       ("~%")))
+             (^ o 'dl-))
+           ("  </gsp>~%"))))))
 
 (define (d2t d)
-  (define (a->sdl a)
-    (match a
-      [{'uni-arrow nl frc ajj sjj}
-       (let* ([vrc (append frc (nl->vrc nl))]
-              [adl (call-with-output-to-new-ds
-                    (lambda ()
-                      (push rs (% rsp-proto
-                                  'vrc  vrc
-                                  'jj   ajj))
-                      (rs/next 'd2t:a->sdl:ajj)))]
-              [sdl (call-with-output-to-new-ds
-                    (lambda ()
-                      (push rs (% rsp-proto
-                                  'vrc  vrc
-                                  'jj   sjj))
-                      (rs/next 'd2t:a->sdl:sjj)))])
-         sdl)]))
   (match d
     [{'uni-var id level} (bs/walk {'uni-var id (+ 1 level)})]
     [{'uni-bind uv d1} d1]
     [{'cons n dl}
      (let ([found (assq n ns)])
        (if (not found)
-         (debug0 'd2t ("unknow name : ~a~%" n))
+         (debug0 'd2t ("unknow cons name : ~a~%" n))
          (match (cdr found)
-           ;; ><><><
-           ;; need bind-unify for adl of cons and dl
-           [{'meaning-type a n nl}
-            (car (a->sdl a))]
-           [{'meaning-data a n n0}
-            (car (a->sdl a))]
+           [{'meaning-type a n nl} (d2t/cons a dl)]
+           [{'meaning-data a n n0} (d2t/cons a dl)]
            [{'meaning-lambda a al}
             (debug0 'd2t
               ("found a lambda from cons name : ~a~%" n)
@@ -999,6 +1003,67 @@
      ;;   it is already handled when creating the trunk
      (list-ref sdl i)]))
 
+;; note that
+;;   we need to do a re up-unify for dl & tadl
+;;   because although
+;;     when applying the data-cons
+;;     dl is up-unify to tadl
+;;   but
+;;     the binding of that up-unify is losted after then
+;;     we must rebuild the binding by re up-unify
+;;     for the var in sjj of type-arrow
+
+;; (define (d2t/cons a dl)
+;;   (: type-arrow dl -> type)
+;;   (match a
+;;     [{'uni-arrow nl frc ajj sjj}
+;;      (let* ([vrc (append frc (nl->vrc nl))]
+;;             [tadl (call-with-output-to-new-ds
+;;                    (lambda ()
+;;                      (push rs (% rsp-proto
+;;                                  'vrc  vrc
+;;                                  'jj   ajj))
+;;                      (rs/next 'd2t/cons:ajj)))])
+;;        (car (call-with-output-to-new-ds
+;;              (lambda ()
+;;                (push rs (% rsp-proto
+;;                            'vrc  vrc
+;;                            'jj   sjj))
+;;                (rs/next 'd2t/cons:sjj)))))]))
+
+(define (d2t/cons a dl)
+  (: type-arrow dl -> type)
+  (match a
+    [{'uni-arrow nl frc ajj sjj}
+     (let* ([vrc (append frc (nl->vrc nl))]
+            [tadl (call-with-output-to-new-ds
+                   (lambda ()
+                     (push rs (% rsp-proto
+                                 'vrc  vrc
+                                 'jj   ajj))
+                     (rs/next 'd2t/cons:ajj)))]
+            [idl (vrc->idl frc)])
+       (if3 [(push bs '(commit-point))
+             (push gs (% gsp-proto
+                         'ex   *up-unify*
+                         'dl+  (reverse dl)
+                         'dl-  (reverse tadl)
+                         'back (lambda ()
+                                 (debug0 'd2t/cons
+                                   ("unify fail~%")
+                                   ("dl   : ~a~%" dl)
+                                   ("tadl : ~a~%" tadl)))))
+             (gs/next 'd2t/cons:re-up-unify)]
+            [(bs/commit idl)
+             ;; it is assumed that all data-constructor return one value
+             (car (call-with-output-to-new-ds
+                   (lambda ()
+                     (push rs (% rsp-proto
+                                 'vrc  vrc
+                                 'jj   sjj))
+                     (rs/next 'd2t/cons:sjj))))]
+            []))]))
+
 (: (let ([p1 (cons 1 1)]
          [p2 (cons 1 1)])
      (set-cdr! p1 p1)
@@ -1007,9 +1072,10 @@
 (: (#0=(1 . #0#) #1=(1 . #1#) #t))
 
 (define (unify m)
-  (: method -> (-> bool))
+  (: method -> (-> (or [#t]
+                       [call-back])))
   (lambda ()
-    (let* ([gsp (pop gs)]
+    (let* ([gsp (tos gs)]
            [c   (^ gsp 'c)]
            [ex  (^ gsp 'ex)]
            [dl1 (^ gsp 'dl+)]
@@ -1022,13 +1088,16 @@
               ("dl+ : ~a~%" dl1)
               ("dl- : ~a~%" dl2))]
            [(if3 [(>= c (length dl1))]
-                 [#t]
-                 [(push gs (% gsp 'c (+ 1 c)))
-                  (if (unify/data/data m
-                                       (list-ref dl1 c)
-                                       (list-ref dl2 c))
-                    (gs/next 'unify)
-                    #f)])]))))
+                 [(pop gs)
+                  #t]
+                 [(if3 [(unify/data/data
+                         m
+                         (list-ref dl1 c)
+                         (list-ref dl2 c))]
+                       [(pop gs)
+                        (push gs (% gsp 'c (+ 1 c)))
+                        (gs/next 'unify)]
+                       [((^ gsp 'back))])])]))))
 
 (define (unify/data/data m d1 d2)
   (: data data -> bool)
@@ -1036,8 +1105,6 @@
   (let ([d1 (bs/walk d1)]
         [d2 (bs/walk d2)])
     (match {d1 d2}
-      ;; ignore the sub-data
-      ;;   for it is used by top-level type-check
       [{{'uni-bind uv d} __} (unify/data/data m d d2)]
       [{__ {'uni-bind uv d}} (unify/data/data m d1 d)]
 
@@ -1056,11 +1123,16 @@
       ;; cons push gs
       [{{'cons n1 dl1} {'cons n2 dl2}}
        (cond [(eq? n1 n2)
-              (push gs (% gsp-proto
-                          'ex *unify*
-                          'dl+ (reverse dl1)
-                          'dl- (reverse dl2)))
-              (gs/next 'unify/data/data:cons)]
+              (let ([ex (case m
+                          ['cover *cover*]
+                          ['unify *unify*])]
+                    [back (^ (tos gs) 'back)])
+                (push gs (% gsp-proto
+                            'ex   ex
+                            'dl+  (reverse dl1)
+                            'dl-  (reverse dl2)
+                            'back back))
+                (gs/next 'unify/data/data:cons))]
              [else #f])]
 
       ;; trunk is the tricky part
@@ -1125,7 +1197,8 @@
 
 (define (unify/trunk/trunk m t1 t2)
   (let ([result1 (try-trunk t1)]
-        [result2 (try-trunk t2)])
+        [result2 (try-trunk t2)]
+        [back (^ (tos gs) 'back)])
     (cond [result1 (unify/data/trunk m result1 t2)]
           [result2 (unify/trunk/data m t1 result2)]
           [else
@@ -1135,21 +1208,23 @@
              [{{'trunk adl1 sdl1 k1 i1} {'trunk adl2 sdl2 k2 i2}}
               (match {(vector-ref k1 0) (vector-ref k2 0)}
                 [{{'todo b1 dl1} {'todo b2 dl2}}
-                 (if3 [(equal? {adl1 sdl1 i1 b1}
-                               {adl2 sdl2 i2 b2})]
+                 (if3 [(equal? {i1 b1}
+                               {i2 b2})]
                       [(push gs (% gsp-proto
-                                   'ex *unify*
-                                   'dl+ (reverse dl1)
-                                   'dl- (reverse dl2)))
+                                   'ex   *unify*
+                                   'dl+  (reverse (append dl1 adl1 sdl1))
+                                   'dl-  (reverse (append dl2 adl2 sdl2))
+                                   'back back))
                        (gs/next 'unify/trunk/trunk)]
                       [#f])]
                 [{{'kvar kv1 dl1} {'kvar kv2 dl2}}
-                 (if3 [(equal? {adl1 sdl1 i1}
-                               {adl2 sdl2 i2})]
+                 (if3 [(equal? {i1}
+                               {i2})]
                       [(push gs (% gsp-proto
-                                   'ex *unify*
-                                   'dl+ (reverse (cons kv1 dl1))
-                                   'dl- (reverse (cons kv2 dl2))))
+                                   'ex   *unify*
+                                   'dl+  (reverse (cons kv1 (append dl1 adl1 sdl1)))
+                                   'dl-  (reverse (cons kv2 (append dl2 adl2 sdl2)))
+                                   'back back))
                        (gs/next 'unify/trunk/trunk)]
                       [#f])]
                 [__ #f])])])))
@@ -1173,9 +1248,16 @@
                                     'jj   ajj2))
                         (rs/next 'unify/arrow/arrow:dl-ajj2)))])
        (if3 [(push gs (% gsp-proto
-                         'ex *unify*
-                         'dl+ (reverse dl-ajj1)
-                         'dl- (reverse dl-ajj2)))
+                         'ex   *unify*
+                         'dl+  (reverse dl-ajj1)
+                         'dl-  (reverse dl-ajj2)
+                         'back (lambda ()
+                                 (debug0 'unify/arrow/arrow
+                                   ("unify fail~%")
+                                   ("ajj1 : ~a~%" ajj1)
+                                   ("ajj2 : ~a~%" ajj2)
+                                   ("dl-ajj1 : ~a~%" dl-ajj1)
+                                   ("dl-ajj2 : ~a~%" dl-ajj2)))))
              (gs/next 'unify/arrow/arrow:ajj1&ajj2)]
             [(let* ([dl-sjj1 (call-with-output-to-new-ds
                               (lambda ()
@@ -1188,23 +1270,21 @@
                                 (push rs (% rsp-proto
                                             'vrc  vrc2
                                             'jj   sjj2))
-                                (rs/next 'unify/arrow/arrow:dl-sjj2)))])
+                                (rs/next 'unify/arrow/arrow:dl-sjj2)))]
+                    [back (^ (tos gs) 'back)])
                (push gs (% gsp-proto
-                           'ex (cons `(unify ,m) (unify m))
-                           'dl+ (reverse dl-sjj1)
-                           'dl- (reverse dl-sjj2)))
+                           'ex   (cons `(unify ,m) (unify m))
+                           'dl+  (reverse dl-sjj1)
+                           'dl-  (reverse dl-sjj2)
+                           'back back))
                (gs/next 'unify/arrow/arrow:sjj1&sjj2))]
-            [(debug0 'unify/arrow/arrow
-               ("unify fail~%")
-               ("ajj1 : ~a~%" ajj1)
-               ("ajj2 : ~a~%" ajj2)
-               ("dl-ajj1 : ~a~%" dl-ajj1)
-               ("dl-ajj2 : ~a~%" dl-ajj2))]))]))
+            []))]))
 
 (define (up-unify m)
-  (: method -> (-> bool))
+  (: method -> (-> (or [#t]
+                       [call-back])))
   (lambda ()
-    (let* ([gsp (pop gs)]
+    (let* ([gsp (tos gs)]
            [c   (^ gsp 'c)]
            [ex  (^ gsp 'ex)]
            [dl1 (^ gsp 'dl+)]
@@ -1217,13 +1297,17 @@
               ("dl+ : ~a~%" dl1)
               ("dl- : ~a~%" dl2))]
            [(if3 [(>= c (length dl1))]
-                 [#t]
-                 [(push gs (% gsp 'c (+ 1 c)))
-                  (if (up-unify/data/data m
-                                          (list-ref dl1 c)
-                                          (list-ref dl2 c))
-                    (gs/next 'up-unify)
-                    #f)])]))))
+                 [(pop gs)
+                  #t]
+                 [(% gsp 'c (+ 1 c))
+                  (if3 [(up-unify/data/data
+                         m
+                         (list-ref dl1 c)
+                         (list-ref dl2 c))]
+                       [(pop gs)
+                        (push gs (% gsp 'c (+ 1 c)))
+                        (gs/next 'up-unify)]
+                       [(^ gsp 'back)])])]))))
 
 ;; note that
 ;;   up-unify vs unify
@@ -1231,14 +1315,11 @@
 ;;   thus we can simply call unify in up-unify
 
 (define (up-unify/data/data m d1 d2)
-  (: data data -> bool)
+  (: data+ type- -> bool)
   ;; var -walk-> fresh-var
   (let ([d1 (bs/walk d1)]
         [d2 (bs/walk d2)])
     (match {d1 d2}
-      ;; ignore the sub-data
-      ;;   for it is used by top-level type-check
-
       [{{'uni-bind uv d} __}
        (unify/data/data m (d2t d) d2)]
       [{__ {'uni-bind uv d}}
@@ -1255,6 +1336,9 @@
 ;; although we can handle multi-return-value
 ;;   but one trunk only return one value
 ;;   a multi-return-value function will return many trunks
+
+(define (get-trunky k0)
+  (vector-ref k0 0))
 
 (define (update-trunky! k0 k)
   (vector-set! k0 0 k))
@@ -1425,9 +1509,21 @@
                                    'jj  ajj))
                        (rs/next 'type-check/arrow:ajj)))])
        (if3 [(push gs (% gsp-proto
-                         'ex     *up-unify*
-                         'dl+    (reverse dl-ajj)
-                         'dl-    (reverse dl-tajj)))
+                         'ex   *up-unify*
+                         'dl+  (reverse dl-ajj)
+                         'dl-  (reverse dl-tajj)
+                         'back
+                         (lambda ()
+                           (debug0 'type-check/arrow
+                             ("unify fail~%")
+                             (":tajj: ")      (for-each print-jo tajj) ("~%")
+                             ("~%")
+                             (":dl-tajj: ~%") (for-each print-data dl-tajj) ("~%")
+                             ("~%")
+                             (":ajj: ")       (for-each print-jo ajj) ("~%")
+                             ("~%")
+                             (":dl-ajj: ~%")  (for-each print-data dl-ajj) ("~%")
+                             ("~%")))))
              (gs/next 'type-check/arrow:ajj&tajj)]
             [(let* ([dl-tsjj (call-with-output-to-new-ds
                               (lambda ()
@@ -1442,23 +1538,25 @@
                                            'jj  sjj))
                                (rs/next 'type-check/arrow:sjj)))])
                (if3 [(push gs (% gsp-proto
-                                 'ex     *up-cover*
-                                 'dl+    (reverse dl-sjj)
-                                 'dl-    (reverse dl-tsjj)))
+                                 'ex   *up-cover*
+                                 'dl+  (reverse dl-sjj)
+                                 'dl-  (reverse dl-tsjj)
+                                 'back
+                                 (lambda ()
+                                   (debug0 'type-check/arrow
+                                     ("cover fail~%")
+                                     (":tsjj: ")      (for-each print-jo tsjj) ("~%")
+                                     ("~%")
+                                     (":dl-tsjj: ~%") (for-each print-data dl-tsjj) ("~%")
+                                     ("~%")
+                                     (":sjj: ")       (for-each print-jo sjj) ("~%")
+                                     ("~%")
+                                     (":dl-sjj: ~%")  (for-each print-data dl-sjj) ("~%")
+                                     ("~%")))))
                      (gs/next 'type-check/arrow:sjj&tsjj)]
                     [(set! ds ds0)
                      (set! bs bs0)
                      (set! gs gs0)
                      #t]
-                    [(debug0 'type-check/arrow
-                       ("cover fail~%")
-                       ("tsjj : ~a~%" tsjj)
-                       ("dl-tsjj : ~a~%" dl-tsjj)
-                       ("sjj : ~a~%" sjj)
-                       ("dl-sjj : ~a~%" dl-sjj))]))]
-            [(debug0 'type-check/arrow
-               ("unify fail~%")
-               ("tajj : ~a~%" tajj)
-               ("dl-tajj : ~a~%" dl-tajj)
-               ("ajj : ~a~%" ajj)
-               ("ajj : ~a~%" dl-ajj))]))]))
+                    []))]
+            []))]))

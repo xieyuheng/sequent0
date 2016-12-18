@@ -1,31 +1,47 @@
 #+PROPERTY: tangle sequent0.scm
 #+title: sequent0
 
-- use ender field in gsp
-
 - note about the control flow of the inner-interpreter
+  used call-back-on-fail in gsp
 
-- better printer for debug
-
-- change the structure of 'cons
-  from
-  {'cons n dl}
-  to
-  {'cons td n dl}
+- still need pretty printer
 
 - re-factor functions about create-trunk-list
-  for duped up-unify
-
-- fix d2t
-  add up-unify for tadl of cons and dl
+  reduce up-unify overhead
 
 - type of uni-arrow
   can we infer it at all ?
+  the following
+  (-> [:t1] [:t2]) %:f drop
+  needs d2t/uni-arrow
+  #+begin_src scheme
+  (def map/has-length
+    (lambda (-> [:l :n has-length]
+                [:l (-> [:t1] [:t2]) %:f drop :f map :n has-length])
+      (-> [null/has-length] [null/has-length])
+      (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
+  #+end_src
 
 * todo
 
-  - [maybe] module system
+  - [maybe]
+    module system
     - for we should not allow redefine as how it is in example now
+
+  - [maybe]
+    change the structure of 'cons
+    from
+    {'cons n dl}
+    to
+    {'cons td n dl}
+    to make it easier to do d2t/cons
+
+  - [maybe]
+    simplify the structure of trunk
+    from
+    {'trunk adl sdl k i}
+    to
+    {'trunk td k i}
 
   - need much more tests to show that type-check is 'safe'
     program that should not be checked
@@ -1434,24 +1450,6 @@
       ;;     the binding of that up-unify is losted after then
       ;;     we must rebuild the binding by re up-unify
       ;;     for the var in sjj of type-arrow
-
-      ;; (define (d2t/cons a dl)
-      ;;   (: type-arrow dl -> type)
-      ;;   (match a
-      ;;     [{'uni-arrow nl frc ajj sjj}
-      ;;      (let* ([vrc (append frc (nl->vrc nl))]
-      ;;             [tadl (call-with-output-to-new-ds
-      ;;                    (lambda ()
-      ;;                      (push rs (% rsp-proto
-      ;;                                  'vrc  vrc
-      ;;                                  'jj   ajj))
-      ;;                      (rs/next 'd2t/cons:ajj)))])
-      ;;        (car (call-with-output-to-new-ds
-      ;;              (lambda ()
-      ;;                (push rs (% rsp-proto
-      ;;                            'vrc  vrc
-      ;;                            'jj   sjj))
-      ;;                (rs/next 'd2t/cons:sjj)))))]))
 
       (define (d2t/cons a dl)
         (: type-arrow dl -> type)

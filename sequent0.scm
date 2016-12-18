@@ -1,3 +1,9 @@
+(def map/has-length
+  (lambda (-> [:l :n has-length]
+              [:l (-> [:t1] [:t2]) %:f drop :f map :n has-length])
+    (-> [null/has-length] [null/has-length])
+    (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
+
 (: syntax
    var                :name
    fvar               ::name
@@ -1012,24 +1018,6 @@
 ;;     the binding of that up-unify is losted after then
 ;;     we must rebuild the binding by re up-unify
 ;;     for the var in sjj of type-arrow
-
-;; (define (d2t/cons a dl)
-;;   (: type-arrow dl -> type)
-;;   (match a
-;;     [{'uni-arrow nl frc ajj sjj}
-;;      (let* ([vrc (append frc (nl->vrc nl))]
-;;             [tadl (call-with-output-to-new-ds
-;;                    (lambda ()
-;;                      (push rs (% rsp-proto
-;;                                  'vrc  vrc
-;;                                  'jj   ajj))
-;;                      (rs/next 'd2t/cons:ajj)))])
-;;        (car (call-with-output-to-new-ds
-;;              (lambda ()
-;;                (push rs (% rsp-proto
-;;                            'vrc  vrc
-;;                            'jj   sjj))
-;;                (rs/next 'd2t/cons:sjj)))))]))
 
 (define (d2t/cons a dl)
   (: type-arrow dl -> type)

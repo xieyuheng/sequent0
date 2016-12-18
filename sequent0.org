@@ -1,13 +1,7 @@
 #+PROPERTY: tangle sequent0.scm
 #+title: sequent0
 
-- note about the control flow of the inner-interpreter
-  used call-back-on-fail in gsp
-
-- still need pretty printer
-
-- re-factor functions about create-trunk-list
-  reduce up-unify overhead
+- pretty printer
 
 - type of uni-arrow
   can we infer it at all ?
@@ -23,6 +17,10 @@
   #+end_src
 
 * todo
+
+  - [maybe]
+    re-factor functions about create-trunk-list
+    reduce up-unify overhead
 
   - [maybe]
     module system
@@ -192,6 +190,19 @@
 *** note about commit too much problem
 
     - bs/commit should not commit free variable
+
+*** note about the control flow of the inner-interpreters
+
+    - compose
+      unify
+      up-unify
+      are all inner-interpreters
+
+    - for debug
+      the inner-interpreters must keep as much as possible data on stacks
+      to report the current state of the machine
+
+    - call-back-on-fail is used in gsp
 
 * stack
 

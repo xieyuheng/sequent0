@@ -1,9 +1,3 @@
-(def map/has-length
-  (lambda (-> [:l :n has-length]
-              [:l (-> [:t1] [:t2]) %:f drop :f map :n has-length])
-    (-> [null/has-length] [null/has-length])
-    (-> [:h cons/has-length] [:h map/has-length cons/has-length])))
-
 (: syntax
    var                :name
    fvar               ::name
@@ -1368,11 +1362,26 @@
 (define (occur-check/data uv d)
   (: fresh-uni-var data -> bool)
   (match (bs/deep d)
-    [{'uni-var id level} (not (uni-var/eq? uv d))]
-    [{'cons n dl}        (occur-check/data-list uv dl)]
-    [{'uni-bind v d}     (occur-check/data-list uv {v d})]
-    [{'trunk t k i}      (occur-check/trunk uv d)]
-    [__                  #t]))
+    [{'uni-var id level}      (not (uni-var/eq? uv d))]
+    [{'cons n dl}             (occur-check/data-list uv dl)]
+    [{'uni-bind v d}          (occur-check/data-list uv {v d})]
+    [{'trunk tadl tsdl k i}   (occur-check/trunk uv d)]
+    [__                       #t]))
+
+;; (occur-check/data
+;;  #0=(uni-var #((:m . 1725) ((1 cons nat ()))) 0)
+;;  (trunk
+;;    ((cons nat ()) (cons nat ()))
+;;    ((cons nat ()))
+;;    #((todo
+;;       ((uni-arrow (:m) () ((var :m) (call zero)) ((var :m)))
+;;        (uni-arrow
+;;         (:n :m)
+;;         ()
+;;         ((var :m) (var :n) (call succ))
+;;         ((var :m) (var :n) (call add) (call succ))))
+;;       (#0# (cons zero ()))))
+;;    0))
 
 (define (occur-check/data-list uv dl)
   (: fresh-uni-var {data ...} -> bool)
@@ -1386,7 +1395,7 @@
 (define (occur-check/trunk uv t)
   (: fresh-uni-var trunk -> bool)
   (match t
-    [{'trunk t k i}
+    [{'trunk tadl tsdl k i}
      (match (vector-ref k 0)
        [{'todo b dl} (occur-check/data-list uv dl)]
        [{'kvar kv1 dl} (occur-check/data-list uv (cons kv1 dl))]

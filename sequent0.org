@@ -2,6 +2,13 @@
 #+title: sequent0
 
 - self-unify & equation
+  - self-unify can form equation
+  - but equations can not be unified together
+    to form equation-group
+    for which will break the semantic of proof
+  - what is the semantic of proof ?
+    structure relation ?
+    or beyond ?
 
 - type of uni-arrow
   the following

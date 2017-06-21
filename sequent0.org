@@ -133,9 +133,14 @@
        trunk              adl sdl (vector trunky) index)
 
     (: id                 (vector (name . counter) ls))
+    ;; counter ensures each id is unique.
+    ;; vector also can ensures uniqueness,
+    ;; but it can not be printed nicely [in this scheme imp].
+    ;; vector is also used for updating,
+    ;; updating happens on ls, when commiting bindings.
+
     (: ls                 {(level . data) ...})
-    ;; vector thus unique
-    ;; ls (level binding-list) in id for commit
+    ;; ls (level binding-list) in id for commit.
 
     (: trunky
        todo               {uni-arrow ...} {data ...}
@@ -515,10 +520,17 @@
 
 *** note meaning
 
+    - when define success,
+      bind new meaning with name.
+
     #+begin_src scheme
     (: meaning
        meaning-type       uni-arrow name {name ...}
+       ;; the first name is who it is binded with,
+       ;; {name ...} is the list of data-cons of the type.
        meaning-data       uni-arrow name name
+       ;; the first name is who it is binded with,
+       ;; the second name is which type-cons this data-cons belong to.
        meaning-lambda     uni-arrow {uni-arrow ...})
     #+end_src
 

@@ -28,7 +28,7 @@
   - d2t is for data
     infer is for jo
 
-* todo
+* [todo-list]
 
   - pretty printer
 
@@ -65,9 +65,9 @@
 
   - cover-check
 
-* note
+* [note]
 
-*** note
+*** [note]
 
     - cut is hiding in call-by-need term-rewriting
 
@@ -152,7 +152,7 @@
        uni-lambda ~)
     #+end_src
 
-*** note about frc [free-var-record]
+*** [note] about frc [free-var-record]
 
     - there are no uni-fvar only uni-var
 
@@ -162,11 +162,11 @@
     - when generate vrc by (nl->vrc nl)
       also use fnl
 
-*** note about lexical-scope
+*** [note] about lexical-scope
 
     - ><><><
 
-*** note about functions which call rs/next or gs/next
+*** [note] about functions which call rs/next or gs/next
 
     | compose           | rs |    | inner-interpreter                         |
     | compose/cons      | rs | gs | for up-unify tdl to data in ds            |
@@ -185,7 +185,7 @@
     | unify/trunk/trunk |    | gs | nested dl in trunk                        |
     | unify/arrow/arrow | rs | gs | dl-ajj1 dl-ajj2 dl-sjj1 dl-sjj2           |
 
-*** note about up-unify overhead
+*** [note] about up-unify overhead
 
     - compose/cons
       直接
@@ -204,7 +204,7 @@
     - d2t/cons
       直接
 
-*** note about commit & undo
+*** [note] about commit & undo
 
     - commit not only for compose/try-body
       but also for compose/cons & compose/body
@@ -212,11 +212,11 @@
       whenever no need to undo
       we can do commit
 
-*** note about commit too much problem
+*** [note] about commit too much problem
 
     - bs/commit should not commit free variable
 
-*** note about the control flow of the inner-interpreters
+*** [note] about the control flow of the inner-interpreters
 
     - compose
       unify
@@ -229,7 +229,7 @@
 
     - call-back-on-fail is used in gsp
 
-*** note about the mark-language
+*** [note] about the mark-language
 
     - named bar-ket <name> ... </name>
       use (<name> ...) to reduce </name>
@@ -290,7 +290,7 @@
          (take ,s ,n)))
     #+end_src
 
-*** note
+*** [note]
 
     #+begin_src scheme
     (: ns {(name . meaning) ...})
@@ -518,7 +518,7 @@
     (: ns {(name . meaning) ...})
     #+end_src
 
-*** note meaning
+*** [note] meaning
 
     - when define success,
       bind new meaning with name.
@@ -536,7 +536,7 @@
 
 *** compile
 
-***** note
+***** [note]
 
       - we need two passes to generate the local in arrow
         pass1 for arrow without local
@@ -1536,14 +1536,14 @@
 
 *** unify
 
-***** note cover
+***** [note] cover
 
       - cover is the poset structure of term-lattice (subsumption-lattice)
 
       - only recur into data
         but not jo
 
-***** note unify
+***** [note] unify
 
       - almost the same code as cover
 
@@ -1565,7 +1565,7 @@
         (no second order semantic unification)
         (but can use proved '=' to get explicit substitutional equality)
 
-***** note the equal? of scheme can handle circle
+***** [note] the equal? of scheme can handle circle
 
       #+begin_src scheme
       (: (let ([p1 (cons 1 1)]
@@ -2001,7 +2001,7 @@
 
 *** def
 
-***** note
+***** [note]
 
       - definers use the interface of compiler
         compile-arrow for def

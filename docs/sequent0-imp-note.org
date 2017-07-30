@@ -1,6 +1,6 @@
 #+title: sequent0 imp note
 
-* 記
+* [note]
 
   - 回到 stack-based 的實現方式
     以明確 cut 在實現中的出現

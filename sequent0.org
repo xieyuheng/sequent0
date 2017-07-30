@@ -1,4 +1,4 @@
-#+PROPERTY: tangle sequent0.scm
+#+property: tangle sequent0.scm
 #+title: sequent0
 
 - self-unify & equation
